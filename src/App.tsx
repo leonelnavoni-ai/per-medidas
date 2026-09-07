@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FolderOpen,
   Upload,
@@ -204,65 +204,111 @@ export default function App() {
     return false;
   });
 
-  // Sync state with server on mount
-  useEffect(() => {
-    // 1. Fetch users and passwords from server
-    ApiService.getUsers()
-      .then((serverUsers) => {
-        if (Array.isArray(serverUsers) && serverUsers.length > 0) {
-          setUsers(serverUsers);
+  const [isServerSyncing, setIsServerSyncing] = useState(false);
+  const [serverOnline, setServerOnline] = useState(true);
+
+  // Sync state with server
+  const syncWithServer = useCallback(async (showNotice = false) => {
+    setIsServerSyncing(true);
+    try {
+      // 1. Fetch users and passwords from server
+      const serverUsers = await ApiService.getUsers();
+      if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+        setUsers(serverUsers);
+        try {
           localStorage.setItem('police_app_users', JSON.stringify(serverUsers));
+        } catch (e) {
+          console.warn('Error saving to localStorage:', e);
         }
-      })
-      .catch((err) => console.warn('Usando usuarios locales:', err));
+      }
 
-    // 2. Fetch measures from server
-    ApiService.getMeasures()
-      .then((serverMeasures) => {
-        if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
-          setMeasures(serverMeasures);
+      // 2. Fetch measures from server
+      const serverMeasures = await ApiService.getMeasures();
+      if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
+        setMeasures(serverMeasures);
+        try {
           localStorage.setItem('judicial_measures_data', JSON.stringify(serverMeasures));
+        } catch (e) {
+          console.warn('Error saving measures:', e);
         }
-      })
-      .catch((err) => console.warn('Usando medidas locales:', err));
+      }
 
-    // 3. Fetch identifications from server
-    ApiService.getIdentifications()
-      .then((serverIdents) => {
-        if (Array.isArray(serverIdents) && serverIdents.length > 0) {
-          setIdentifications(serverIdents);
+      // 3. Fetch identifications from server
+      const serverIdents = await ApiService.getIdentifications();
+      if (Array.isArray(serverIdents) && serverIdents.length > 0) {
+        setIdentifications(serverIdents);
+        try {
           localStorage.setItem('police_person_identifications', JSON.stringify(serverIdents));
+        } catch (e) {
+          console.warn('Error saving identifications:', e);
         }
-      })
-      .catch((err) => console.warn('Usando identificaciones locales:', err));
+      }
 
-    // 4. Fetch general documents from server
-    ApiService.getDocuments()
-      .then((serverDocs) => {
-        if (Array.isArray(serverDocs) && serverDocs.length > 0) {
-          setFiles((prev) => {
-            const driveFiles = prev.filter((f) => Boolean(f.driveId));
-            const serverDocIds = new Set(serverDocs.map((d) => d.id));
-            const filteredDrive = driveFiles.filter((df) => !serverDocIds.has(df.id));
-            return [...serverDocs, ...filteredDrive];
-          });
-        }
-      })
-      .catch((err) => console.warn('Usando documentos locales:', err));
+      // 4. Fetch general documents from server
+      const serverDocs = await ApiService.getDocuments();
+      if (Array.isArray(serverDocs) && serverDocs.length > 0) {
+        setFiles((prev) => {
+          const driveFiles = prev.filter((f) => Boolean(f.driveId));
+          const serverDocIds = new Set(serverDocs.map((d) => d.id));
+          const filteredDrive = driveFiles.filter((df) => !serverDocIds.has(df.id));
+          return [...serverDocs, ...filteredDrive];
+        });
+      }
+
+      setServerOnline(true);
+      if (showNotice) {
+        showToast('Datos sincronizados con el servidor policial correctamente.', 'success');
+      }
+    } catch (err) {
+      console.warn('Aviso de sincronización con servidor:', err);
+      setServerOnline(false);
+      if (showNotice) {
+        showToast('Modo local: no se pudo conectar con el servidor central.', 'info');
+      }
+    } finally {
+      setIsServerSyncing(false);
+    }
   }, []);
 
-  // Persist users to localStorage and server
+  // Sync on mount and keep mobile client refreshed periodically
   useEffect(() => {
-    try {
-      localStorage.setItem('police_app_users', JSON.stringify(users));
-    } catch (e) {
-      console.warn('Error saving users to localStorage:', e);
-    }
-    // Sync users and passwords to the server
-    ApiService.saveUsers(users).catch((err) =>
-      console.warn('Error al sincronizar usuarios con el servidor:', err)
-    );
-  }, [users]);
+    syncWithServer(false);
+
+    // Auto-poll every 6 seconds to keep mobile and desktop in real-time sync
+    const pollTimer = setInterval(() => {
+      syncWithServer(false);
+    }, 6000);
+
+    const handleFocus = () => {
+      syncWithServer(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(pollTimer);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [syncWithServer]);
+
+  // Safe user update function that pushes changes to server explicitly without risk of overwriting on mount
+  const updateUsersState = useCallback((updater: React.SetStateAction<UserProfile[]>) => {
+    setUsers((prevUsers) => {
+      const nextUsers = typeof updater === 'function' ? updater(prevUsers) : updater;
+      try {
+        localStorage.setItem('police_app_users', JSON.stringify(nextUsers));
+      } catch (e) {
+        console.warn('Error saving users to localStorage:', e);
+      }
+      // Send to server
+      ApiService.saveUsers(nextUsers).catch((err) =>
+        console.warn('Error al sincronizar usuarios con el servidor:', err)
+      );
+      return nextUsers;
+    });
+  }, []);
 
   // Keep currentUser in sync if updated in users list
   useEffect(() => {
@@ -1076,7 +1122,11 @@ export default function App() {
             </div>
           </div>
         )}
-        <LoginScreen users={users} onLogin={handleLogin} />
+        <LoginScreen
+          users={users}
+          onLogin={handleLogin}
+          onRefreshUsers={() => syncWithServer(false)}
+        />
       </div>
     );
   }
@@ -1132,6 +1182,9 @@ export default function App() {
         fileCount={files.length}
         measuresCount={measures.length}
         identificationsCount={identifications.length}
+        isServerSyncing={isServerSyncing}
+        serverOnline={serverOnline}
+        onManualSync={() => syncWithServer(true)}
       />
 
       {/* Main Content Area */}
@@ -1239,7 +1292,7 @@ export default function App() {
         {currentTab === 'admin' && (
           <AdminPanel
             users={users}
-            setUsers={setUsers}
+            setUsers={updateUsersState}
             currentUser={currentUser}
             onSwitchUser={handleSwitchUser}
             auditLogs={auditLogs}

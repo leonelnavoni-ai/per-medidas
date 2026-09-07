@@ -9,6 +9,7 @@ import {
   ChevronDown,
   LogOut,
   UserCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { UserProfile, DriveConnectionState, PermissionSet } from '../types';
 import { PoliceLogo } from './PoliceLogo';
@@ -35,6 +36,9 @@ interface HeaderProps {
   onOpenLogoPreview?: () => void;
   logoVariant?: 'adapted' | 'original';
   onLogout?: () => void;
+  isServerSyncing?: boolean;
+  serverOnline?: boolean;
+  onManualSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -59,6 +63,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLogoPreview,
   logoVariant = 'adapted',
   onLogout,
+  isServerSyncing = false,
+  serverOnline = true,
+  onManualSync,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showDriveMenu, setShowDriveMenu] = useState(false);
@@ -268,6 +275,22 @@ export const Header: React.FC<HeaderProps> = ({
                 <Download className="w-3.5 h-3.5 animate-pulse" />
                 <span className="hidden sm:inline">Descargar App</span>
                 <span className="sm:hidden">Instalar</span>
+              </button>
+            )}
+
+            {/* Real-time Server Sync status indicator / trigger */}
+            {onManualSync && (
+              <button
+                id="header-server-sync-btn"
+                onClick={onManualSync}
+                disabled={isServerSyncing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                title="Sincronizar usuarios, medidas e identificaciones con el servidor policial"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isServerSyncing ? 'animate-spin' : ''}`} />
+                <span className="hidden md:inline text-[11px] font-medium">
+                  {isServerSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                </span>
               </button>
             )}
 

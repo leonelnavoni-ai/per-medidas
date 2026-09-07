@@ -32,7 +32,13 @@ export class ApiService {
   // ---- USERS & PASSWORDS ----
   static async getUsers(): Promise<UserProfile[]> {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch(`/api/users?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       if (!res.ok) throw new Error('No se pudo obtener usuarios del servidor');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -43,7 +49,7 @@ export class ApiService {
   }
 
   static async saveUsers(users: UserProfile[]): Promise<UserProfile[]> {
-    const res = await fetch('/api/users', {
+    const res = await fetch(`/api/users?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(users),
@@ -55,7 +61,7 @@ export class ApiService {
   }
 
   static async saveSingleUser(user: UserProfile): Promise<UserProfile> {
-    const res = await fetch('/api/users/save', {
+    const res = await fetch(`/api/users/save?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
@@ -67,7 +73,7 @@ export class ApiService {
   }
 
   static async deleteUser(userId: string): Promise<boolean> {
-    const res = await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+    const res = await fetch(`/api/users/${encodeURIComponent(userId)}?_t=${Date.now()}`, {
       method: 'DELETE',
     });
     if (!res.ok) {
@@ -79,7 +85,13 @@ export class ApiService {
   // ---- JUDICIAL MEASURES ----
   static async getMeasures(): Promise<JudicialMeasure[]> {
     try {
-      const res = await fetch('/api/measures');
+      const res = await fetch(`/api/measures?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       if (!res.ok) throw new Error('No se pudo obtener medidas del servidor');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -90,7 +102,7 @@ export class ApiService {
   }
 
   static async saveMeasures(measures: JudicialMeasure[]): Promise<JudicialMeasure[]> {
-    const res = await fetch('/api/measures', {
+    const res = await fetch(`/api/measures?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(measures),
@@ -104,7 +116,13 @@ export class ApiService {
   // ---- PERSON IDENTIFICATIONS ----
   static async getIdentifications(): Promise<IdentifiedPerson[]> {
     try {
-      const res = await fetch('/api/identifications');
+      const res = await fetch(`/api/identifications?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       if (!res.ok) throw new Error('No se pudo obtener identificaciones del servidor');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -115,7 +133,7 @@ export class ApiService {
   }
 
   static async saveIdentifications(identifications: IdentifiedPerson[]): Promise<IdentifiedPerson[]> {
-    const res = await fetch('/api/identifications', {
+    const res = await fetch(`/api/identifications?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(identifications),
@@ -129,7 +147,13 @@ export class ApiService {
   // ---- DOCUMENTS / REPOSITORY FILES ----
   static async getDocuments(): Promise<DriveFile[]> {
     try {
-      const res = await fetch('/api/documents');
+      const res = await fetch(`/api/documents?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       if (!res.ok) throw new Error('No se pudo obtener documentos del servidor');
       const data = await res.json();
       return Array.isArray(data) ? data : [];

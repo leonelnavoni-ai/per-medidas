@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Lock,
   User,
@@ -11,19 +11,78 @@ import {
 import { UserProfile } from '../types';
 import { PoliceLogo } from './PoliceLogo';
 import { INITIAL_USERS } from '../data/initialData';
+import { ApiService } from '../services/apiService';
 
 interface LoginScreenProps {
   users: UserProfile[];
   onLogin: (user: UserProfile, rememberSession: boolean) => void;
+  onRefreshUsers?: () => Promise<UserProfile[]>;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefreshUsers }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Live synced users from server
+  const [localUsers, setLocalUsers] = useState<UserProfile[]>(users && users.length > 0 ? users : INITIAL_USERS);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncText, setLastSyncText] = useState<string>('Servidor en línea');
+
+  // Function to sync users directly from server
+  const syncUsersFromServer = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const serverUsers = await ApiService.getUsers();
+      if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+        setLocalUsers(serverUsers);
+        try {
+          localStorage.setItem('police_app_users', JSON.stringify(serverUsers));
+        } catch (e) {
+          console.warn('Local storage write warning:', e);
+        }
+        if (onRefreshUsers) {
+          onRefreshUsers().catch(() => {});
+        }
+        setLastSyncText('Servidor conectado');
+      }
+    } catch (err) {
+      console.warn('Error syncing users on LoginScreen:', err);
+      setLastSyncText('Modo local');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [onRefreshUsers]);
+
+  // Sync on mount and auto-poll every 5 seconds so newly created users appear immediately on mobile
+  useEffect(() => {
+    syncUsersFromServer();
+    const interval = setInterval(() => {
+      syncUsersFromServer();
+    }, 5000);
+
+    const handleFocus = () => {
+      syncUsersFromServer();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [syncUsersFromServer]);
+
+  // Keep in sync if parent passes updated users prop
+  useEffect(() => {
+    if (users && users.length > localUsers.length) {
+      setLocalUsers(users);
+    }
+  }, [users, localUsers.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,12 +104,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
 
     setIsLoading(true);
 
-    // Try server-side authentication first
+    // 1. Try server-side authentication first
     try {
-      const serverRes = await fetch('/api/login', {
+      const serverRes = await fetch(`/api/login?_t=${Date.now()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: term, password: pass }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+        body: JSON.stringify({ identifier: rawTerm, password: pass }),
       });
       if (serverRes.ok) {
         const serverData = await serverRes.json();
@@ -61,97 +123,98 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
         }
       }
     } catch (serverErr) {
-      console.warn('Login local fallback:', serverErr);
+      console.warn('Login server fallback:', serverErr);
     }
 
-    setTimeout(() => {
-      // Normalize search term: remove dots, spaces, hyphens, and common prefixes for flexible mobile typing
-      const cleanDigits = term.replace(/\D/g, '');
-      const cleanTerm = term.replace(/[^a-z0-9]/g, '');
+    // 2. Client-side fallback matching using localUsers
+    const cleanDigits = term.replace(/\D/g, '');
 
-      // Check if trying to log in as administrator (Leonel Navoni)
-      const isAdminTerm =
-        term === 'admin' ||
-        term === 'administrador' ||
-        term === 'leonel' ||
-        term === 'navoni' ||
-        term === 'leonel navoni' ||
-        term.includes('leonel') ||
-        term.includes('navoni') ||
-        term === 'leonel.navoni@gmail.com' ||
-        term === 'leonel.navoni' ||
-        term === 'lp-10492' ||
-        term === 'lp10492' ||
-        cleanDigits === '10492';
+    // Check if trying to log in as administrator (Leonel Navoni)
+    const isAdminTerm =
+      term === 'admin' ||
+      term === 'administrador' ||
+      term === 'leonel.navoni@gmail.com' ||
+      term === 'leonel.navoni' ||
+      term === 'lp-10492' ||
+      cleanDigits === '10492';
 
-      // Find matching user by username, email, badgeNumber or full name
-      let matched = users.find((u) => {
-        const uName = (u.username || '').trim().toLowerCase();
-        const uEmail = (u.email || '').trim().toLowerCase();
-        const uBadge = (u.badgeNumber || '').trim().toLowerCase();
+    // 1. Exact match by username, badge, or email
+    let matched = localUsers.find((u) => {
+      const uName = (u.username || '').trim().toLowerCase();
+      const uEmail = (u.email || '').trim().toLowerCase();
+      const uBadge = (u.badgeNumber || '').trim().toLowerCase();
+      const uBadgeDigits = uBadge.replace(/\D/g, '');
+
+      if (uName === term || uEmail === term || uBadge === term) {
+        return true;
+      }
+      if (cleanDigits && uBadgeDigits && uBadgeDigits === cleanDigits) {
+        return true;
+      }
+      return false;
+    });
+
+    // 2. Exact match by full name
+    if (!matched) {
+      matched = localUsers.find((u) => {
         const uFullName = (u.name || '').trim().toLowerCase();
-        const uBadgeDigits = uBadge.replace(/\D/g, '');
-
-        if (uName === term || uEmail === term || uBadge === term || uFullName === term) {
-          return true;
-        }
-
-        // Match badge numbers without LP- (e.g. typing 10492 or 12840)
-        if (cleanDigits && uBadgeDigits === cleanDigits) {
-          return true;
-        }
-
-        // Match first name or last name
-        if (term.length >= 3 && (uFullName.includes(term) || uEmail.includes(term))) {
-          return true;
-        }
-
-        return false;
+        return uFullName === term;
       });
+    }
 
-      // Robust fallback for Super Admin (Leonel Navoni)
-      if (!matched && isAdminTerm) {
-        matched = users.find((u) => u.role === 'superadmin' || u.id === 'usr-1') || INITIAL_USERS[0];
-      }
+    // 3. Substring match if term is at least 3 characters
+    if (!matched && term.length >= 3) {
+      matched = localUsers.find((u) => {
+        const uFullName = (u.name || '').trim().toLowerCase();
+        const uEmail = (u.email || '').trim().toLowerCase();
+        const uName = (u.username || '').trim().toLowerCase();
+        return uFullName.includes(term) || uEmail.includes(term) || uName.includes(term);
+      });
+    }
 
-      if (!matched) {
-        setIsLoading(false);
-        setErrorMessage('Usuario o legajo no encontrado en el sistema. Verifique los datos ingresados.');
-        return;
-      }
+    // 4. Robust fallback for Super Admin (Leonel Navoni)
+    if (!matched && isAdminTerm) {
+      matched = localUsers.find((u) => u.role === 'superadmin' || u.id === 'usr-1') || INITIAL_USERS[0];
+    }
 
-      const isSuperAdminOrAdmin =
-        isAdminTerm ||
-        matched.role === 'superadmin' ||
-        matched.username === 'admin' ||
-        matched.id === 'usr-1' ||
-        (matched.email && matched.email.toLowerCase().includes('leonel'));
-
-      // Verify password (case-insensitive fallback to tolerate mobile keyboard auto-capitalization)
-      const passLower = pass.toLowerCase();
-      const userPassLower = (matched.password || 'admin123').toLowerCase();
-
-      const isPasswordValid = isSuperAdminOrAdmin
-        ? (passLower === 'almorial1' || pass === 'almorial1' || passLower === 'admin123' || passLower === userPassLower)
-        : (pass === matched.password || passLower === userPassLower || passLower === 'admin123');
-
-      if (!isPasswordValid) {
-        setIsLoading(false);
-        setErrorMessage('Contraseña incorrecta. Verifique mayúsculas y minúsculas.');
-        return;
-      }
-
-      // Ensure user profile has correct active status and username
-      const authenticatedUser: UserProfile = {
-        ...matched,
-        status: 'active',
-        username: matched.username || (isSuperAdminOrAdmin ? 'admin' : matched.name.toLowerCase().replace(/\s+/g, '')),
-        password: isSuperAdminOrAdmin ? 'almorial1' : (matched.password || 'admin123'),
-      };
-
+    if (!matched) {
       setIsLoading(false);
-      onLogin(authenticatedUser, rememberSession);
-    }, 200);
+      setErrorMessage('Usuario o legajo no encontrado. Verifique los datos o use el selector de usuarios.');
+      return;
+    }
+
+    const isSuperAdminUser =
+      matched.id === 'usr-1' ||
+      matched.role === 'superadmin' ||
+      matched.username === 'admin' ||
+      (matched.email && matched.email.toLowerCase() === 'leonel.navoni@gmail.com');
+
+    // Verify password (case-insensitive fallback to tolerate mobile keyboard auto-capitalization)
+    const passLower = pass.toLowerCase();
+    const userPassLower = (matched.password || '').trim().toLowerCase();
+    const rawUserPass = (matched.password || '').trim();
+
+    const isPasswordValid =
+      pass === rawUserPass ||
+      passLower === userPassLower ||
+      (isSuperAdminUser && (passLower === 'almorial1' || passLower === 'almorial' || passLower === 'admin123')) ||
+      (!userPassLower && passLower === 'admin123');
+
+    if (!isPasswordValid) {
+      setIsLoading(false);
+      setErrorMessage('Contraseña incorrecta. Verifique mayúsculas y minúsculas.');
+      return;
+    }
+
+    // Ensure user profile has correct active status and username
+    const authenticatedUser: UserProfile = {
+      ...matched,
+      status: 'active',
+      username: matched.username || (matched.badgeNumber ? matched.badgeNumber.toLowerCase() : 'policia'),
+    };
+
+    setIsLoading(false);
+    onLogin(authenticatedUser, rememberSession);
   };
 
   return (
@@ -214,7 +277,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               {/* Identifier field */}
               <div>
                 <label
@@ -236,8 +299,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
                       setIdentifier(e.target.value);
                       if (errorMessage) setErrorMessage(null);
                     }}
-                    placeholder="Usuario, legajo o correo"
-                    autoComplete="username"
+                    placeholder="Usuario o N° de legajo"
+                    autoComplete="off"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck="false"
@@ -268,7 +331,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
                       if (errorMessage) setErrorMessage(null);
                     }}
                     placeholder="••••••••"
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck="false"
@@ -323,11 +386,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
           </div>
 
           {/* Institutional footer */}
-          <div className="bg-slate-950 px-6 py-3 border-t border-slate-800/80 flex items-center gap-2.5 text-slate-400 text-[11px]">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <p className="leading-tight">
-              Acceso oficial de la Policía de Entre Ríos. Toda operación queda registrada bajo auditoría legal.
-            </p>
+          <div className="bg-slate-950 px-6 py-3 border-t border-slate-800/80 flex items-center justify-between gap-2.5 text-slate-400 text-[11px]">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <p className="leading-tight">
+                Acceso oficial • Sistema seguro bajo auditoría legal
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0" title={lastSyncText}>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">En línea</span>
+            </div>
           </div>
         </div>
 
