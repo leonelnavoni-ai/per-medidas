@@ -21,7 +21,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberSession, setRememberSession] = useState(true);
+  const [rememberSession, setRememberSession] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

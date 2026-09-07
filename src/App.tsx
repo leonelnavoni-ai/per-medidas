@@ -183,16 +183,24 @@ export default function App() {
     return INITIAL_USERS[0];
   });
 
-  // Authentication State
+  // Authentication State - Defaults strictly to false so entering the application requires login
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
-      const auth = localStorage.getItem('police_app_authenticated');
-      if (auth !== null) return auth === 'true';
+      // 1. Check current browser tab session
+      const sessionAuth = sessionStorage.getItem('police_app_authenticated');
+      if (sessionAuth === 'true') return true;
+
+      // 2. Check if the user explicitly requested to remember login on this device
+      const remember = localStorage.getItem('police_app_remember_login');
+      const localAuth = localStorage.getItem('police_app_authenticated');
+      if (remember === 'true' && localAuth === 'true') {
+        return true;
+      }
     } catch (e) {
       console.warn('Error reading auth state:', e);
     }
-    // Default to true for current session so users see the dashboard with the logout button immediately active
-    return true;
+    // By default, entry to the system strictly requires user authentication
+    return false;
   });
 
   // Persist users to localStorage
@@ -450,8 +458,17 @@ export default function App() {
     setCurrentUser(user);
     setIsAuthenticated(true);
     try {
-      localStorage.setItem('police_app_authenticated', 'true');
-      localStorage.setItem('police_app_active_user_id', user.id);
+      sessionStorage.setItem('police_app_authenticated', 'true');
+      sessionStorage.setItem('police_app_active_user_id', user.id);
+      if (rememberSession) {
+        localStorage.setItem('police_app_remember_login', 'true');
+        localStorage.setItem('police_app_authenticated', 'true');
+        localStorage.setItem('police_app_active_user_id', user.id);
+      } else {
+        localStorage.removeItem('police_app_remember_login');
+        localStorage.removeItem('police_app_authenticated');
+        localStorage.removeItem('police_app_active_user_id');
+      }
     } catch (e) {
       console.warn('Failed to save session state:', e);
     }
@@ -462,7 +479,10 @@ export default function App() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     try {
-      localStorage.setItem('police_app_authenticated', 'false');
+      sessionStorage.removeItem('police_app_authenticated');
+      sessionStorage.removeItem('police_app_active_user_id');
+      localStorage.removeItem('police_app_authenticated');
+      localStorage.removeItem('police_app_remember_login');
       localStorage.removeItem('police_app_active_user_id');
     } catch (e) {
       console.warn('Failed to clear session state:', e);
