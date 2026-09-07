@@ -56,6 +56,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { PersonIdentificationExplorer } from './components/PersonIdentificationExplorer';
 import { PersonIdentificationModal } from './components/PersonIdentificationModal';
 import { PersonWhatsAppModal } from './components/PersonWhatsAppModal';
+import { ApiService } from './services/apiService';
 
 export default function App() {
   // Navigation
@@ -203,13 +204,64 @@ export default function App() {
     return false;
   });
 
-  // Persist users to localStorage
+  // Sync state with server on mount
+  useEffect(() => {
+    // 1. Fetch users and passwords from server
+    ApiService.getUsers()
+      .then((serverUsers) => {
+        if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+          setUsers(serverUsers);
+          localStorage.setItem('police_app_users', JSON.stringify(serverUsers));
+        }
+      })
+      .catch((err) => console.warn('Usando usuarios locales:', err));
+
+    // 2. Fetch measures from server
+    ApiService.getMeasures()
+      .then((serverMeasures) => {
+        if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
+          setMeasures(serverMeasures);
+          localStorage.setItem('judicial_measures_data', JSON.stringify(serverMeasures));
+        }
+      })
+      .catch((err) => console.warn('Usando medidas locales:', err));
+
+    // 3. Fetch identifications from server
+    ApiService.getIdentifications()
+      .then((serverIdents) => {
+        if (Array.isArray(serverIdents) && serverIdents.length > 0) {
+          setIdentifications(serverIdents);
+          localStorage.setItem('police_person_identifications', JSON.stringify(serverIdents));
+        }
+      })
+      .catch((err) => console.warn('Usando identificaciones locales:', err));
+
+    // 4. Fetch general documents from server
+    ApiService.getDocuments()
+      .then((serverDocs) => {
+        if (Array.isArray(serverDocs) && serverDocs.length > 0) {
+          setFiles((prev) => {
+            const driveFiles = prev.filter((f) => Boolean(f.driveId));
+            const serverDocIds = new Set(serverDocs.map((d) => d.id));
+            const filteredDrive = driveFiles.filter((df) => !serverDocIds.has(df.id));
+            return [...serverDocs, ...filteredDrive];
+          });
+        }
+      })
+      .catch((err) => console.warn('Usando documentos locales:', err));
+  }, []);
+
+  // Persist users to localStorage and server
   useEffect(() => {
     try {
       localStorage.setItem('police_app_users', JSON.stringify(users));
     } catch (e) {
       console.warn('Error saving users to localStorage:', e);
     }
+    // Sync users and passwords to the server
+    ApiService.saveUsers(users).catch((err) =>
+      console.warn('Error al sincronizar usuarios con el servidor:', err)
+    );
   }, [users]);
 
   // Keep currentUser in sync if updated in users list
@@ -511,7 +563,9 @@ export default function App() {
       showToast(`Preparando descarga de ${file.name}...`, 'success');
       let blobUrl = file.localBlobUrl;
 
-      if (!blobUrl && file.driveId && driveState.accessToken) {
+      if (!blobUrl && file.serverPdfUrl) {
+        blobUrl = file.serverPdfUrl;
+      } else if (!blobUrl && file.driveId && driveState.accessToken) {
         const blob = await DriveService.downloadPdfBlob(driveState.accessToken, file.driveId);
         blobUrl = URL.createObjectURL(blob);
       }
@@ -573,7 +627,7 @@ export default function App() {
     showToast(`PDF "${newFile.name}" alojado e indexado correctamente.`, 'success');
   };
 
-  // State update helper for Judicial Measures with local persistence
+  // State update helper for Judicial Measures with server and local persistence
   const updateMeasuresState = (newMeasures: JudicialMeasure[]) => {
     setMeasures(newMeasures);
     try {
@@ -581,9 +635,13 @@ export default function App() {
     } catch (e) {
       console.warn('Could not persist measures to localStorage:', e);
     }
+    // Persist to server
+    ApiService.saveMeasures(newMeasures).catch((err) =>
+      console.warn('Error al guardar medidas en el servidor:', err)
+    );
   };
 
-  // State update helper for Identified Persons with local persistence
+  // State update helper for Identified Persons with server and local persistence
   const updateIdentificationsState = (newIdentifications: IdentifiedPerson[]) => {
     setIdentifications(newIdentifications);
     try {
@@ -591,6 +649,10 @@ export default function App() {
     } catch (e) {
       console.warn('Could not persist identifications to localStorage:', e);
     }
+    // Persist to server
+    ApiService.saveIdentifications(newIdentifications).catch((err) =>
+      console.warn('Error al guardar identificaciones en el servidor:', err)
+    );
   };
 
   // Open Create Person Identification Modal
@@ -702,7 +764,27 @@ export default function App() {
       let blob: Blob;
       let downloadFileName: string;
 
-      if (measure.hasCustomPdf && measure.pdfBase64) {
+      if (measure.hasCustomPdf && measure.serverPdfUrl) {
+        try {
+          const res = await fetch(measure.serverPdfUrl);
+          if (res.ok) {
+            blob = await res.blob();
+            downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
+          } else {
+            throw new Error(`Error HTTP ${res.status}`);
+          }
+        } catch (fetchErr) {
+          console.warn('Fallback a base64 o generado:', fetchErr);
+          if (measure.pdfBase64) {
+            blob = base64ToBlob(measure.pdfBase64);
+            downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
+          } else {
+            blob = generateJudicialMeasurePdfBlob(measure);
+            const safeOficio = (measure.nroOficio || 'SN').replace(/[^a-zA-Z0-9]/g, '_');
+            downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
+          }
+        }
+      } else if (measure.hasCustomPdf && measure.pdfBase64) {
         blob = base64ToBlob(measure.pdfBase64);
         downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
       } else if (measure.hasCustomPdf && measure.driveFileId && driveState.isConnected && driveState.accessToken) {
@@ -786,13 +868,23 @@ export default function App() {
 
     if (attachedFile) {
       try {
+        // Upload to server storage
+        let serverPdfUrl: string | undefined;
+        try {
+          const uploadRes = await ApiService.uploadPdf(attachedFile);
+          serverPdfUrl = uploadRes.fileUrl;
+        } catch (serverErr) {
+          console.warn('Advertencia al guardar PDF en servidor:', serverErr);
+        }
+
         const base64Data = await fileToBase64(attachedFile);
         const localBlobUrl = URL.createObjectURL(attachedFile);
         const targetFolder = folderName.trim() || 'Medidas Judiciales';
 
         finalMeasure.hasCustomPdf = true;
+        finalMeasure.serverPdfUrl = serverPdfUrl;
         finalMeasure.pdfBase64 = base64Data;
-        finalMeasure.pdfBlobUrl = localBlobUrl;
+        finalMeasure.pdfBlobUrl = serverPdfUrl || localBlobUrl;
         finalMeasure.pdfFileName = attachedFile.name;
         finalMeasure.pdfFileSize = attachedFile.size;
         finalMeasure.driveFolder = targetFolder;
@@ -838,6 +930,7 @@ export default function App() {
             targetFolder
           ],
           isHostedLocal: !finalMeasure.driveFileId,
+          serverPdfUrl,
           localBlobUrl,
           description: `Oficio Judicial N° ${finalMeasure.nroOficio}. Beneficiario/a: ${finalMeasure.victima}. Denunciado: ${finalMeasure.victimario}. Organismo: ${finalMeasure.provenienteDe}. Carpeta en Drive: ${targetFolder}`,
           uploadedBy: currentUser.name,

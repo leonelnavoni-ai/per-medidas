@@ -84,6 +84,7 @@ export interface JudicialMeasure {
   updatedBy?: string;
   // Custom uploaded PDF & Google Drive metadata
   hasCustomPdf?: boolean;
+  serverPdfUrl?: string;
   pdfBase64?: string;
   pdfFileName?: string;
   pdfFileSize?: number;
@@ -106,6 +107,7 @@ export interface DriveFile {
   category: string;
   tags: string[];
   isHostedLocal?: boolean;
+  serverPdfUrl?: string;
   localBlobUrl?: string;
   description?: string;
   uploadedBy?: string;

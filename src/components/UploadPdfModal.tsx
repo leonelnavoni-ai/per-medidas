@@ -11,6 +11,7 @@ import {
 import { DriveFile, DriveConnectionState } from '../types';
 import { CATEGORIES, DEFAULT_DRIVE_FOLDER_ID, DEFAULT_DRIVE_FOLDER_URL } from '../data/initialData';
 import { DriveService } from '../services/driveService';
+import { ApiService } from '../services/apiService';
 import { formatBytes } from '../utils/formatters';
 
 interface UploadPdfModalProps {
@@ -88,6 +89,15 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
     if (!tags.includes(category)) tags.unshift(category);
 
     try {
+      // 1. Upload to the server so the physical PDF is permanently stored on the server
+      let serverPdfUrl: string | undefined;
+      try {
+        const uploadResult = await ApiService.uploadPdf(selectedFile);
+        serverPdfUrl = uploadResult.fileUrl;
+      } catch (uploadErr) {
+        console.warn('Could not upload to server, falling back to local/drive:', uploadErr);
+      }
+
       // Storage destination: configured Google Drive repository folder
       const targetUploadFolder = driveState.uploadFolderId || DEFAULT_DRIVE_FOLDER_ID;
 
@@ -106,11 +116,12 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
           tags,
           description: description.trim(),
           uploadedBy: currentUserName,
+          serverPdfUrl,
           localBlobUrl: URL.createObjectURL(selectedFile),
         };
         onAddFile(newDoc);
       } else {
-        // Automatically save to local repository database
+        // Automatically save to local repository database with permanent server file URL
         const blobUrl = URL.createObjectURL(selectedFile);
         const newDoc: DriveFile = {
           id: `hosted-${Date.now()}`,
@@ -123,6 +134,7 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
           tags,
           description: description.trim(),
           isHostedLocal: true,
+          serverPdfUrl,
           localBlobUrl: blobUrl,
           uploadedBy: currentUserName,
         };

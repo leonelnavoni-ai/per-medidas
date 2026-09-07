@@ -25,7 +25,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -44,6 +44,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
     }
 
     setIsLoading(true);
+
+    // Try server-side authentication first
+    try {
+      const serverRes = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: term, password: pass }),
+      });
+      if (serverRes.ok) {
+        const serverData = await serverRes.json();
+        if (serverData && serverData.user) {
+          setIsLoading(false);
+          onLogin(serverData.user, rememberSession);
+          return;
+        }
+      }
+    } catch (serverErr) {
+      console.warn('Login local fallback:', serverErr);
+    }
 
     setTimeout(() => {
       // Normalize search term: remove dots, spaces, hyphens, and common prefixes for flexible mobile typing

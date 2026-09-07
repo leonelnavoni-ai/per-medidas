@@ -43,11 +43,14 @@ export function base64ToBlob(base64Data: string, contentType = 'application/pdf'
  * Converts a JudicialMeasure into a DriveFile compatible with the viewer and files index
  */
 export function measureToDriveFile(m: JudicialMeasure): DriveFile {
-  let blobUrl = m.pdfBlobUrl;
+  let blobUrl = m.serverPdfUrl || m.pdfBlobUrl;
   let fileSize = m.pdfFileSize || 102400;
 
-  // If measure has a custom uploaded PDF stored in base64, restore its Blob URL
-  if (m.hasCustomPdf && m.pdfBase64) {
+  // If measure has a server-stored PDF, use it
+  if (m.serverPdfUrl) {
+    blobUrl = m.serverPdfUrl;
+  } else if (m.hasCustomPdf && m.pdfBase64) {
+    // If measure has a custom uploaded PDF stored in base64, restore its Blob URL
     try {
       const customBlob = base64ToBlob(m.pdfBase64);
       blobUrl = URL.createObjectURL(customBlob);
@@ -86,6 +89,7 @@ export function measureToDriveFile(m: JudicialMeasure): DriveFile {
     category: m.tipoMedida,
     tags,
     isHostedLocal: !m.driveFileId,
+    serverPdfUrl: m.serverPdfUrl,
     localBlobUrl: blobUrl,
     description: `Oficio Judicial N° ${m.nroOficio}. Beneficiario/a: ${m.victima}. Denunciado/a: ${m.victimario}. Vigente: ${m.fechaDesde} hasta ${m.fechaHasta || 'Duración de la causa'}. Organismo emisor: ${m.provenienteDe}.${m.driveFolder ? ` [Google Drive: ${m.driveFolder}]` : ''}`,
     uploadedBy: m.updatedBy || 'Poder Judicial / Registro Central',

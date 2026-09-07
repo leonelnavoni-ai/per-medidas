@@ -2,6 +2,12 @@
   RewriteEngine On
   RewriteBase /
 
+  # Permitir acceso directo a archivos PDF subidos y assets
+  RewriteRule ^uploads/(.*)$ uploads/$1 [L]
+
+  # Enrutar solicitudes API al backend PHP en cPanel
+  RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
   # No reescribir archivos ni carpetas físicas existentes
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
