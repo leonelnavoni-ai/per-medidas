@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #pdf-canvas-element,
+  #pdf-canvas-element * {
+    visibility: visible;
+  }
+  #pdf-canvas-element {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border: none;
+  }
+}

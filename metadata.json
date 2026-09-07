@@ -1,0 +1,8 @@
+{
+  "name": "PER-Medidas",
+  "description": "Sistema de gestión de medidas judiciales, identificación de personas y oficios policiales con envío por WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

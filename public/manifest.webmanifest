@@ -1,0 +1,20 @@
+{
+  "name": "Comisaría del Menor y Violencia Familiar",
+  "short_name": "Comisaría Menor",
+  "description": "Sistema de registro, búsqueda y gestión de medidas de protección judicial para la Comisaría del Menor y Violencia Familiar",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "orientation": "any",
+  "categories": ["productivity", "utilities", "business"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

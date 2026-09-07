@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500" fill="none">
+  <defs>
+    <linearGradient id="rayLightGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="40%" stop-color="#FACC15" />
+      <stop offset="80%" stop-color="#EAB308" />
+      <stop offset="100%" stop-color="#CA8A04" />
+    </linearGradient>
+    <linearGradient id="rayShadowGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#CA8A04" />
+      <stop offset="50%" stop-color="#A16207" />
+      <stop offset="85%" stop-color="#854D0E" />
+      <stop offset="100%" stop-color="#713F12" />
+    </linearGradient>
+    <linearGradient id="ringGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="30%" stop-color="#EAB308" />
+      <stop offset="70%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#92400E" />
+    </linearGradient>
+    <linearGradient id="silverGloss" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="40%" stop-color="#E2E8F0" />
+      <stop offset="70%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+    <linearGradient id="ribbonBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7DD3FC" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+    <linearGradient id="artigasRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EF4444" />
+      <stop offset="50%" stop-color="#DC2626" />
+      <stop offset="100%" stop-color="#991B1B" />
+    </linearGradient>
+    <linearGradient id="greenField" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22C55E" />
+      <stop offset="50%" stop-color="#16A34A" />
+      <stop offset="100%" stop-color="#15803D" />
+    </linearGradient>
+    <path id="svgUpperArc" d="M 68 250 A 182 182 0 0 1 432 250" fill="none" />
+    <path id="svgLowerArc" d="M 425 250 A 175 175 0 0 1 75 250" fill="none" />
+    <clipPath id="svgShieldClip">
+      <path d="M 206 218 L 294 218 L 294 274 Q 294 316 250 332 Q 206 316 206 274 Z" />
+    </clipPath>
+  </defs>
+
+  <circle cx="250" cy="250" r="248" fill="#0A0A0A" />
+
+  <!-- Faceted Golden Sunburst -->
+  <!-- Generated 32 rays matching per.png -->
+  <g>
+    <!-- 0 deg -->
+    <polygon points="250,250 438,231 495,250" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 495,250 438,268" fill="url(#rayShadowGold)"/>
+    <!-- 11.25 deg -->
+    <polygon points="250,250 438,268 470,293" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 470,293 427,323" fill="url(#rayShadowGold)"/>
+    <!-- 22.5 deg -->
+    <polygon points="250,250 427,323 476,343" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 476,343 398,380" fill="url(#rayShadowGold)"/>
+    <!-- 33.75 deg -->
+    <polygon points="250,250 398,380 436,400" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 436,400 356,430" fill="url(#rayShadowGold)"/>
+    <!-- 45 deg -->
+    <polygon points="250,250 356,430 423,423" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 423,423 380,398" fill="url(#rayShadowGold)"/>
+    <!-- 56.25 deg -->
+    <polygon points="250,250 380,398 374,457" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 374,457 323,427" fill="url(#rayShadowGold)"/>
+    <!-- 67.5 deg -->
+    <polygon points="250,250 323,427 343,476" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 343,476 268,438" fill="url(#rayShadowGold)"/>
+    <!-- 78.75 deg -->
+    <polygon points="250,250 268,438 293,470" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 293,470 231,438" fill="url(#rayShadowGold)"/>
+    <!-- 90 deg -->
+    <polygon points="250,250 268,438 250,495" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 250,495 231,438" fill="url(#rayShadowGold)"/>
+    <!-- 101.25 deg -->
+    <polygon points="250,250 231,438 206,470" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 206,470 176,438" fill="url(#rayShadowGold)"/>
+    <!-- 112.5 deg -->
+    <polygon points="250,250 176,438 156,476" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 156,476 176,427" fill="url(#rayShadowGold)"/>
+    <!-- 123.75 deg -->
+    <polygon points="250,250 176,427 125,457" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 125,457 119,398" fill="url(#rayShadowGold)"/>
+    <!-- 135 deg -->
+    <polygon points="250,250 119,398 76,423" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 76,423 143,430" fill="url(#rayShadowGold)"/>
+    <!-- 146.25 deg -->
+    <polygon points="250,250 143,430 63,400" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 63,400 101,380" fill="url(#rayShadowGold)"/>
+    <!-- 157.5 deg -->
+    <polygon points="250,250 101,380 23,343" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 23,343 72,323" fill="url(#rayShadowGold)"/>
+    <!-- 168.75 deg -->
+    <polygon points="250,250 72,323 29,293" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 29,293 61,268" fill="url(#rayShadowGold)"/>
+    <!-- 180 deg -->
+    <polygon points="250,250 61,268 5,250" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 5,250 61,231" fill="url(#rayShadowGold)"/>
+    <!-- 191.25 deg -->
+    <polygon points="250,250 61,231 29,206" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 29,206 72,176" fill="url(#rayShadowGold)"/>
+    <!-- 202.5 deg -->
+    <polygon points="250,250 72,176 23,156" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 23,156 101,119" fill="url(#rayShadowGold)"/>
+    <!-- 213.75 deg -->
+    <polygon points="250,250 101,119 63,99" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 63,99 143,69" fill="url(#rayShadowGold)"/>
+    <!-- 225 deg -->
+    <polygon points="250,250 143,69 76,76" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 76,76 119,101" fill="url(#rayShadowGold)"/>
+    <!-- 236.25 deg -->
+    <polygon points="250,250 119,101 125,42" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 125,42 176,72" fill="url(#rayShadowGold)"/>
+    <!-- 247.5 deg -->
+    <polygon points="250,250 176,72 156,23" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 156,23 231,61" fill="url(#rayShadowGold)"/>
+    <!-- 258.75 deg -->
+    <polygon points="250,250 231,61 206,29" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 206,29 268,61" fill="url(#rayShadowGold)"/>
+    <!-- 270 deg -->
+    <polygon points="250,250 231,61 250,5" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 250,5 268,61" fill="url(#rayShadowGold)"/>
+    <!-- 281.25 deg -->
+    <polygon points="250,250 268,61 293,29" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 293,29 323,72" fill="url(#rayShadowGold)"/>
+    <!-- 292.5 deg -->
+    <polygon points="250,250 323,72 343,23" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 343,23 323,72" fill="url(#rayShadowGold)"/>
+    <!-- 303.75 deg -->
+    <polygon points="250,250 323,72 374,42" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 374,42 380,101" fill="url(#rayShadowGold)"/>
+    <!-- 315 deg -->
+    <polygon points="250,250 380,101 423,76" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 423,76 356,69" fill="url(#rayShadowGold)"/>
+    <!-- 326.25 deg -->
+    <polygon points="250,250 356,69 436,99" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 436,99 398,119" fill="url(#rayShadowGold)"/>
+    <!-- 337.5 deg -->
+    <polygon points="250,250 398,119 476,156" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 476,156 427,176" fill="url(#rayShadowGold)"/>
+    <!-- 348.75 deg -->
+    <polygon points="250,250 427,176 470,206" fill="url(#rayLightGold)"/>
+    <polygon points="250,250 470,206 438,231" fill="url(#rayShadowGold)"/>
+  </g>
+
+  <!-- Concentric Rings -->
+  <circle cx="250" cy="250" r="195" fill="#0A0A0A" stroke="url(#ringGold)" stroke-width="3" />
+  <circle cx="250" cy="250" r="150" fill="#0A0A0A" stroke="url(#ringGold)" stroke-width="3" />
+
+  <!-- Arched Gold Typography -->
+  <text fill="#FACC15" stroke="#78350F" stroke-width="0.6" font-size="12.8" font-weight="900" font-family="system-ui, sans-serif" letter-spacing="1.8">
+    <textPath href="#svgUpperArc" startOffset="50%" text-anchor="middle">
+      COMISARÍA DEL MENOR Y VIOLENCIA FAMILIAR
+    </textPath>
+  </text>
+  <circle cx="65" cy="250" r="4" fill="#FACC15" stroke="#78350F" stroke-width="1" />
+  <circle cx="435" cy="250" r="4" fill="#FACC15" stroke="#78350F" stroke-width="1" />
+  <text fill="#FACC15" stroke="#78350F" stroke-width="0.6" font-size="16" font-weight="900" font-family="system-ui, sans-serif" letter-spacing="3">
+    <textPath href="#svgLowerArc" startOffset="50%" text-anchor="middle">
+      POLICÍA DE ENTRE RÍOS
+    </textPath>
+  </text>
+
+  <!-- Inner Core -->
+  <circle cx="250" cy="250" r="148" fill="#090D16" />
+
+  <!-- Ribbon Top -->
+  <path d="M 182 178 Q 250 162 318 178 L 314 189 Q 250 173 186 189 Z" fill="url(#ribbonBlue)" stroke="#FFFFFF" stroke-width="1.2" />
+  <text x="250" y="184" fill="#FFFFFF" font-size="6.8" font-weight="bold" font-family="system-ui, sans-serif" text-anchor="middle" letter-spacing="0.8">POLICÍA PROVINCIA ENTRE RÍOS</text>
+
+  <!-- Helmet -->
+  <g transform="translate(250, 204)">
+    <path d="M -3 -15 Q 0 -22 6 -17 Q 0 -13 -3 -15 Z" fill="url(#silverGloss)" />
+    <ellipse cx="0" cy="-6" rx="11" ry="9" fill="url(#silverGloss)" stroke="#334155" stroke-width="0.8" />
+    <path d="M -9 -4 Q 0 -1 9 -4 L 8 2 Q 0 5 -8 2 Z" fill="#1E293B" stroke="#94A3B8" stroke-width="0.6" />
+    <path d="M -10 2 L -8 7 Q 0 10 8 7 L 10 2 Q 0 4 -10 2 Z" fill="url(#silverGloss)" stroke="#334155" stroke-width="0.8" />
+  </g>
+
+  <!-- Silver Leaves -->
+  <g stroke="url(#silverGloss)" fill="url(#silverGloss)" opacity="0.95">
+    <path d="M 198 225 Q 186 250 190 282 Q 196 308 212 324" fill="none" stroke-width="2.5" />
+    <ellipse cx="190" cy="235" rx="5" ry="3" transform="rotate(-30 190 235)" />
+    <ellipse cx="184" cy="254" rx="6" ry="3.5" transform="rotate(-15 184 254)" />
+    <ellipse cx="185" cy="275" rx="6" ry="3.5" transform="rotate(15 185 275)" />
+    <ellipse cx="192" cy="296" rx="5.5" ry="3.5" transform="rotate(40 192 296)" />
+    <ellipse cx="204" cy="314" rx="5" ry="3" transform="rotate(65 204 314)" />
+
+    <path d="M 302 225 Q 314 250 310 282 Q 304 308 288 324" fill="none" stroke-width="2.5" />
+    <ellipse cx="310" cy="235" rx="5" ry="3" transform="rotate(30 310 235)" />
+    <ellipse cx="316" cy="254" rx="6" ry="3.5" transform="rotate(15 316 254)" />
+    <ellipse cx="315" cy="275" rx="6" ry="3.5" transform="rotate(-15 315 275)" />
+    <ellipse cx="308" cy="296" rx="5.5" ry="3.5" transform="rotate(-40 308 296)" />
+    <ellipse cx="296" cy="314" rx="5" ry="3" transform="rotate(-65 296 314)" />
+  </g>
+
+  <!-- Shield -->
+  <path d="M 204 216 L 296 216 L 296 274 Q 296 318 250 335 Q 204 318 204 274 Z" fill="#0F172A" stroke="url(#ringGold)" stroke-width="3" />
+  <g clip-path="url(#svgShieldClip)">
+    <rect x="200" y="210" width="100" height="42" fill="url(#ribbonBlue)" />
+    <rect x="200" y="252" width="100" height="38" fill="#FFFFFF" />
+    <rect x="200" y="290" width="100" height="50" fill="url(#ribbonBlue)" />
+    <rect x="250" y="210" width="55" height="58" fill="url(#greenField)" />
+    <g transform="translate(274, 238)">
+      <circle cx="0" cy="0" r="6" fill="#FBBF24" stroke="#D97706" stroke-width="0.8" />
+      <path d="M 0 -11 L 2 -7 L 0 -6 L -2 -7 Z M 11 0 L 7 2 L 6 0 L 7 -2 Z M 0 11 L 2 7 L 0 6 L -2 7 Z M -11 0 L -7 2 L -6 0 L -7 -2 Z" fill="#FDE047" />
+    </g>
+    <polygon points="200,214 224,214 300,314 276,314" fill="url(#artigasRed)" stroke="#991B1B" stroke-width="0.8" />
+    <!-- Rooster Cartouche -->
+    <g transform="translate(250, 264)">
+      <ellipse cx="0" cy="0" rx="12" ry="14" fill="url(#ringGold)" stroke="#78350F" stroke-width="1" />
+      <ellipse cx="0" cy="0" rx="9" ry="11" fill="#FEF08A" stroke="#CA8A04" stroke-width="0.6" />
+      <path d="M -1 -7 Q 1 -9 3 -7 Q 4 -9 5 -6" fill="#DC2626" />
+      <circle cx="2" cy="-5" r="2.5" fill="#B45309" />
+      <polygon points="4,-5 7,-4.5 4,-3.5" fill="#EA580C" />
+      <ellipse cx="-1" cy="-1" rx="4.5" ry="4" fill="#B45309" />
+    </g>
+  </g>
+  <path d="M 194 330 Q 250 352 306 330 L 302 338 Q 250 360 198 338 Z" fill="url(#ribbonBlue)" stroke="#FFFFFF" stroke-width="1" />
+</svg>
