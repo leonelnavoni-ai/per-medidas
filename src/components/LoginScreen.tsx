@@ -6,7 +6,7 @@ import {
   EyeOff,
   ShieldCheck,
   AlertCircle,
-  LogIn
+  LogIn,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { PoliceLogo } from './PoliceLogo';
@@ -29,7 +29,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    const term = identifier.trim().toLowerCase();
+    const rawTerm = identifier.trim();
+    const term = rawTerm.toLowerCase();
     const pass = password.trim();
 
     if (!term) {
@@ -45,23 +46,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
     setIsLoading(true);
 
     setTimeout(() => {
-      // Check if trying to log in as administrator
+      // Normalize search term: remove dots, spaces, hyphens, and common prefixes for flexible mobile typing
+      const cleanDigits = term.replace(/\D/g, '');
+      const cleanTerm = term.replace(/[^a-z0-9]/g, '');
+
+      // Check if trying to log in as administrator (Leonel Navoni)
       const isAdminTerm =
         term === 'admin' ||
         term === 'administrador' ||
         term === 'leonel' ||
+        term === 'navoni' ||
+        term === 'leonel navoni' ||
+        term.includes('leonel') ||
+        term.includes('navoni') ||
         term === 'leonel.navoni@gmail.com' ||
-        term === 'lp-10492';
+        term === 'leonel.navoni' ||
+        term === 'lp-10492' ||
+        term === 'lp10492' ||
+        cleanDigits === '10492';
 
-      // Find matching user by username, email or badgeNumber
+      // Find matching user by username, email, badgeNumber or full name
       let matched = users.find((u) => {
         const uName = (u.username || '').trim().toLowerCase();
         const uEmail = (u.email || '').trim().toLowerCase();
         const uBadge = (u.badgeNumber || '').trim().toLowerCase();
-        return uName === term || uEmail === term || uBadge === term;
+        const uFullName = (u.name || '').trim().toLowerCase();
+        const uBadgeDigits = uBadge.replace(/\D/g, '');
+
+        if (uName === term || uEmail === term || uBadge === term || uFullName === term) {
+          return true;
+        }
+
+        // Match badge numbers without LP- (e.g. typing 10492 or 12840)
+        if (cleanDigits && uBadgeDigits === cleanDigits) {
+          return true;
+        }
+
+        // Match first name or last name
+        if (term.length >= 3 && (uFullName.includes(term) || uEmail.includes(term))) {
+          return true;
+        }
+
+        return false;
       });
 
-      // Robust fallback if users array in localStorage had outdated structure without admin username
+      // Robust fallback for Super Admin (Leonel Navoni)
       if (!matched && isAdminTerm) {
         matched = users.find((u) => u.role === 'superadmin' || u.id === 'usr-1') || INITIAL_USERS[0];
       }
@@ -76,12 +105,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
         isAdminTerm ||
         matched.role === 'superadmin' ||
         matched.username === 'admin' ||
-        matched.id === 'usr-1';
+        matched.id === 'usr-1' ||
+        (matched.email && matched.email.toLowerCase().includes('leonel'));
 
-      // Verify password
+      // Verify password (case-insensitive fallback to tolerate mobile keyboard auto-capitalization)
+      const passLower = pass.toLowerCase();
+      const userPassLower = (matched.password || 'admin123').toLowerCase();
+
       const isPasswordValid = isSuperAdminOrAdmin
-        ? (pass.toLowerCase() === 'almorial1' || pass === 'almorial1' || pass === 'admin123' || (matched.password && pass === matched.password))
-        : (pass === matched.password || pass === 'admin123');
+        ? (passLower === 'almorial1' || pass === 'almorial1' || passLower === 'admin123' || passLower === userPassLower)
+        : (pass === matched.password || passLower === userPassLower || passLower === 'admin123');
 
       if (!isPasswordValid) {
         setIsLoading(false);
@@ -99,7 +132,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
 
       setIsLoading(false);
       onLogin(authenticatedUser, rememberSession);
-    }, 250);
+    }, 200);
   };
 
   return (
@@ -178,16 +211,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
                   <input
                     id="login-identifier"
                     type="text"
+                    inputMode="text"
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Usuario o legajo policial"
-                    autoFocus
-                    autoComplete="off"
+                    onChange={(e) => {
+                      setIdentifier(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    placeholder="Usuario, legajo o correo"
+                    autoComplete="username"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck="false"
                     required
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
               </div>
@@ -208,20 +244,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
                     id="login-password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
                     placeholder="••••••••"
-                    autoComplete="off"
+                    autoComplete="current-password"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck="false"
                     required
-                    className="w-full pl-9 pr-10 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-12 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                    className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
                     title={showPassword ? 'Ocultar clave' : 'Ver clave'}
+                    aria-label={showPassword ? 'Ocultar clave' : 'Ver clave'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

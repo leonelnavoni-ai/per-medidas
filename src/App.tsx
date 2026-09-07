@@ -305,7 +305,10 @@ export default function App() {
   useEffect(() => {
     // Service worker
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.register('/sw.js').catch((err) => {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        // Check for updates on load
+        reg.update().catch(() => {});
+      }).catch((err) => {
         console.warn('Service worker registration failed:', err);
       });
     }

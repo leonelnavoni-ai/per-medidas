@@ -22,3 +22,12 @@
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json image/svg+xml
 </IfModule>
+
+# Evitar que index.html y sw.js se congelen en la memoria de los celulares
+<IfModule mod_headers.c>
+  <FilesMatch "(index\.html|sw\.js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+</IfModule>
