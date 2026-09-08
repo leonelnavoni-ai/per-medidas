@@ -1,4 +1,4 @@
-const CACHE_NAME = 'drive-pdf-v3';
+const CACHE_NAME = 'drive-pdf-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -27,9 +27,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests and skip Google API / Drive requests from service worker caching
+  // Only handle GET requests
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+
+  // CRITICAL: NEVER intercept or cache /api/ calls in Service Worker
+  // All backend and database synchronization must pass directly to the server
+  if (url.pathname.startsWith('/api/') || url.pathname === '/api') {
+    return;
+  }
+
+  // Skip Google API / Drive requests from service worker caching
   if (url.origin.includes('googleapis.com') || url.origin.includes('google.com')) {
     return;
   }

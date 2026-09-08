@@ -89,13 +89,14 @@ export default function App() {
   const [activeViewingFile, setActiveViewingFile] = useState<DriveFile | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  // Users & RBAC State (Stored on Web Server SQL Database)
+  // Users & RBAC State (Stored and synchronized directly with the Web Server)
   const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
+
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
       const activeId = sessionStorage.getItem('police_app_active_user_id');
       if (activeId) {
-        const found = INITIAL_USERS.find((u) => u.id === activeId);
+        const found = INITIAL_USERS.find((u: UserProfile) => u.id === activeId);
         if (found) return found;
       }
     } catch (e) {}
@@ -123,26 +124,40 @@ export default function App() {
     isSyncingRef.current = true;
     setIsServerSyncing(true);
     try {
-      // 1. Fetch users and passwords from server
-      const serverUsers = await ApiService.getUsers();
+      // Parallel requests for fast response on mobile data networks
+      const [serverUsers, serverMeasures, serverIdents, serverDocs] = await Promise.all([
+        ApiService.getUsers().catch((e) => {
+          console.warn('Sync users notice:', e);
+          return null;
+        }),
+        ApiService.getMeasures().catch((e) => {
+          console.warn('Sync measures notice:', e);
+          return null;
+        }),
+        ApiService.getIdentifications().catch((e) => {
+          console.warn('Sync identifications notice:', e);
+          return null;
+        }),
+        ApiService.getDocuments().catch((e) => {
+          console.warn('Sync documents notice:', e);
+          return null;
+        }),
+      ]);
+
+      let hasLiveResponse = false;
+
       if (Array.isArray(serverUsers) && serverUsers.length > 0) {
         setUsers(serverUsers);
+        hasLiveResponse = true;
       }
-
-      // 2. Fetch measures from server
-      const serverMeasures = await ApiService.getMeasures();
       if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
         setMeasures(serverMeasures);
+        hasLiveResponse = true;
       }
-
-      // 3. Fetch identifications from server
-      const serverIdents = await ApiService.getIdentifications();
       if (Array.isArray(serverIdents) && serverIdents.length > 0) {
         setIdentifications(serverIdents);
+        hasLiveResponse = true;
       }
-
-      // 4. Fetch general documents from server
-      const serverDocs = await ApiService.getDocuments();
       if (Array.isArray(serverDocs) && serverDocs.length > 0) {
         setFiles((prev) => {
           const driveFiles = prev.filter((f) => Boolean(f.driveId));
@@ -150,17 +165,28 @@ export default function App() {
           const filteredDrive = driveFiles.filter((df) => !serverDocIds.has(df.id));
           return [...serverDocs, ...filteredDrive];
         });
+        hasLiveResponse = true;
       }
 
-      setServerOnline(true);
-      if (showNotice) {
-        showToast('Datos sincronizados con el servidor policial correctamente.', 'success');
+      if (hasLiveResponse) {
+        setServerOnline(true);
+        if (showNotice) {
+          showToast('Sincronización con el servidor policial establecida.', 'success');
+        }
+      } else {
+        const isHealthy = await ApiService.checkHealth();
+        setServerOnline(isHealthy);
+        if (isHealthy && showNotice) {
+          showToast('Conectado con el servidor policial.', 'success');
+        } else if (!isHealthy && showNotice) {
+          showToast('Operando en modo local (sin conexión al servidor central).', 'warning');
+        }
       }
     } catch (err) {
       console.warn('Aviso de sincronización con servidor:', err);
       setServerOnline(false);
       if (showNotice) {
-        showToast('Aviso: no se pudo conectar con el servidor web central.', 'warning');
+        showToast('Operando en modo local seguro.', 'warning');
       }
     } finally {
       setIsServerSyncing(false);
@@ -170,6 +196,11 @@ export default function App() {
 
   // Sync on mount and keep mobile client refreshed periodically
   useEffect(() => {
+    // Clear any legacy local storage user cache to ensure 100% server authority
+    try {
+      localStorage.removeItem('police_users_db_cache');
+    } catch (e) {}
+
     syncWithServer(false);
 
     // Auto-poll every 6 seconds to keep mobile and desktop in real-time sync
@@ -1008,6 +1039,8 @@ export default function App() {
           users={users}
           onLogin={handleLogin}
           isServerOnline={serverOnline}
+          isServerSyncing={isServerSyncing}
+          onRetryConnection={() => syncWithServer(true)}
         />
       </div>
     );

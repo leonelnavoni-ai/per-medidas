@@ -18,18 +18,31 @@ async function safeJson<T = any>(res: Response): Promise<T> {
   return await res.json();
 }
 
-// Smart fetcher that tries the standard route first and falls back to .php if needed
+// Smart fetcher that ensures real-time sync with server and no caching
 async function fetchWithPhpFallback(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const mergedOptions: RequestInit = {
+    ...options,
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      ...(options.headers || {}),
+    },
+  };
+
   try {
-    const res = await fetch(endpoint, options);
+    const res = await fetch(endpoint, mergedOptions);
     const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.includes('application/json')) {
+    
+    // If the server answered with JSON (200, 400, 401, 403, 500), return the response immediately
+    if (contentType.includes('application/json')) {
       return res;
     }
-    // If not JSON or 404, check if there's a .php version
+
+    // If not JSON (e.g. 404 or static SPA index.html), try PHP fallback if not already a .php url
     if (!endpoint.includes('.php')) {
       const phpEndpoint = endpoint.replace('/api/', '/api/').split('?')[0] + '.php' + (endpoint.includes('?') ? '?' + endpoint.split('?')[1] : '');
-      const phpRes = await fetch(phpEndpoint, options);
+      const phpRes = await fetch(phpEndpoint, mergedOptions);
       const phpContentType = phpRes.headers.get('content-type') || '';
       if (phpContentType.includes('application/json')) {
         return phpRes;
@@ -39,13 +52,30 @@ async function fetchWithPhpFallback(endpoint: string, options: RequestInit = {})
   } catch (e) {
     if (!endpoint.includes('.php')) {
       const phpEndpoint = endpoint.replace('/api/', '/api/').split('?')[0] + '.php' + (endpoint.includes('?') ? '?' + endpoint.split('?')[1] : '');
-      return await fetch(phpEndpoint, options);
+      try {
+        return await fetch(phpEndpoint, mergedOptions);
+      } catch {}
     }
     throw e;
   }
 }
 
 export class ApiService {
+  // ---- HEALTH CHECK ----
+  static async checkHealth(): Promise<boolean> {
+    try {
+      const res = await fetchWithPhpFallback(`/api/health?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   // ---- LOGIN WITH SQL DATABASE ----
   static async login(identifier: string, password: string): Promise<{ success: boolean; user: UserProfile; message?: string }> {
     const res = await fetchWithPhpFallback(`/api/login?_t=${Date.now()}`, {
@@ -113,15 +143,30 @@ export class ApiService {
   }
 
   static async saveSingleUser(user: UserProfile): Promise<UserProfile> {
-    const res = await fetchWithPhpFallback(`/api/users?_t=${Date.now()}`, {
+    try {
+      const res = await fetchWithPhpFallback(`/api/users/save?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user),
+      });
+      if (res.ok) {
+        return await safeJson(res);
+      }
+    } catch (e) {
+      console.warn('Fallback a /api/users para guardar usuario individual:', e);
+    }
+
+    // Fallback: use /api/users
+    const fallbackRes = await fetchWithPhpFallback(`/api/users?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
     });
-    if (!res.ok) {
+    if (!fallbackRes.ok) {
       throw new Error('Error al guardar el usuario en el servidor');
     }
-    return await safeJson(res);
+    const data = await safeJson(fallbackRes);
+    return Array.isArray(data) ? data.find((u) => u.id === user.id) || user : data;
   }
 
   static async deleteUser(userId: string): Promise<boolean> {

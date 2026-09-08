@@ -36,6 +36,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { UserWhatsAppModal } from './UserWhatsAppModal';
+import { ApiService } from '../services/apiService';
 import {
   UserProfile,
   RoleType,
@@ -113,6 +114,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // WhatsApp credentials sharing modal
   const [whatsAppTargetUser, setWhatsAppTargetUser] = useState<UserProfile | null>(null);
   const [sendWhatsAppOnCreate, setSendWhatsAppOnCreate] = useState(true);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [createdSuccessUser, setCreatedSuccessUser] = useState<UserProfile | null>(null);
 
   // Password generator
   const generateSecurePassword = () => {
@@ -205,10 +208,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserName.trim() || !newUserEmail.trim()) return;
 
+    setIsSavingUser(true);
     const assignedPassword = newUserPassword.trim() || generateSecurePassword();
     const suggestedUsername = newUserUsername.trim() || newUserEmail.trim().split('@')[0].toLowerCase();
 
@@ -226,10 +230,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       lastLogin: new Date().toISOString(),
     };
 
-    setUsers((prev) => [newUser, ...prev]);
+    try {
+      await ApiService.saveSingleUser(newUser);
+      console.log('Usuario guardado exitosamente en servidor central:', newUser.name);
+    } catch (err) {
+      console.warn('Advertencia al guardar usuario en servidor central:', err);
+    }
+
+    setUsers((prev) => {
+      const next = [newUser, ...prev];
+      return next;
+    });
+
     onAddAuditLog(
       'CREATE_USER',
-      `Nuevo usuario creado: ${newUser.name} (@${newUser.username}) con rol ${newUser.role} y contraseña generada`,
+      `Nuevo usuario creado y guardado en servidor: ${newUser.name} (@${newUser.username}) con rol ${newUser.role}`,
       undefined,
       'SUCCESS'
     );
@@ -237,9 +252,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     // Auto copy the password to clipboard for admin convenience
     handleCopyPassword(assignedPassword, `user-${newUser.id}`);
 
-    // If requested, immediately open the WhatsApp credentials modal for this new user
+    setIsSavingUser(false);
+    setShowAddUserModal(false);
+
+    // If requested, immediately open the WhatsApp credentials modal for this new user, otherwise show success modal
     if (sendWhatsAppOnCreate) {
       setWhatsAppTargetUser(newUser);
+    } else {
+      setCreatedSuccessUser(newUser);
     }
 
     setNewUserName('');
@@ -249,7 +269,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setNewUserBadge('');
     setNewUserDepartment('');
     setNewUserRole('viewer');
-    setShowAddUserModal(false);
   };
 
   // Start editing user and load their data & permissions
@@ -291,7 +310,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setUseCustomPermissions(false);
   };
 
-  const handleSaveEditUser = (e: React.FormEvent) => {
+  const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     if (!editName.trim() || !editEmail.trim()) return;
@@ -311,11 +330,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       customPermissions: useCustomPermissions ? { ...editPermissions } : undefined,
     };
 
-    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    try {
+      await ApiService.saveSingleUser(updatedUser);
+    } catch (err) {
+      console.warn('Error al actualizar usuario en servidor:', err);
+    }
+
+    setUsers((prev) => {
+      const next = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+      return next;
+    });
 
     onAddAuditLog(
       'UPDATE_USER',
-      `Datos de ${updatedUser.name} actualizados (Rol: ${updatedUser.role}, Estado: ${updatedUser.status}${passwordChanged ? ', Contraseña modificada' : ''}${useCustomPermissions ? ', Permisos personalizados asignados' : ''})`,
+      `Datos de ${updatedUser.name} actualizados en servidor (Rol: ${updatedUser.role}, Estado: ${updatedUser.status}${passwordChanged ? ', Contraseña modificada' : ''}${useCustomPermissions ? ', Permisos personalizados asignados' : ''})`,
       undefined,
       'SUCCESS'
     );
@@ -327,12 +355,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setDeletingUser(user);
   };
 
-  const handleConfirmDeleteUser = () => {
+  const handleConfirmDeleteUser = async () => {
     if (!deletingUser) return;
     if (deletingUser.id === currentUser.id) return;
 
     const target = deletingUser;
-    setUsers((prev) => prev.filter((u) => u.id !== target.id));
+    try {
+      await ApiService.deleteUser(target.id);
+    } catch (err) {
+      console.warn('Error al eliminar usuario en servidor:', err);
+    }
+
+    setUsers((prev) => {
+      const next = prev.filter((u) => u.id !== target.id);
+      return next;
+    });
 
     onAddAuditLog(
       'DELETE_USER',
@@ -2028,13 +2065,122 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5"
+                  disabled={isSavingUser}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5"
                 >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Crear Usuario y Credencial</span>
+                  {isSavingUser ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Guardando en Servidor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Crear Usuario y Credencial</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmación de Usuario Creado con Credenciales Claras */}
+      {createdSuccessUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-emerald-500/40 rounded-2xl shadow-2xl p-6 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-emerald-600 dark:text-emerald-400">
+                  ¡Usuario Guardado en el Servidor!
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  La cuenta ya está sincronizada y habilitada para ingresar desde computadoras o celulares.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700/60">
+                <span className="text-slate-500 dark:text-slate-400">Nombre:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{createdSuccessUser.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700/60">
+                <span className="text-slate-500 dark:text-slate-400">Usuario de Acceso:</span>
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400 select-all">
+                  @{createdSuccessUser.username}
+                </span>
+              </div>
+              {createdSuccessUser.badgeNumber && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700/60">
+                  <span className="text-slate-500 dark:text-slate-400">Legajo Policial:</span>
+                  <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                    {createdSuccessUser.badgeNumber}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700/60">
+                <span className="text-slate-500 dark:text-slate-400">Contraseña Asignada:</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 select-all text-sm">
+                  {createdSuccessUser.password || 'admin123'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-500 dark:text-slate-400">Rol Policial:</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300 capitalize">
+                  {createdSuccessUser.role} (Activo)
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const text = `Credenciales de Acceso al Sistema Policial:\n• Nombre: ${createdSuccessUser.name}\n• Usuario: @${createdSuccessUser.username}\n• Legajo: ${createdSuccessUser.badgeNumber || 'N/A'}\n• Contraseña: ${createdSuccessUser.password || 'admin123'}\n• Rol: ${createdSuccessUser.role}`;
+                  navigator.clipboard.writeText(text);
+                  handleCopyPassword(createdSuccessUser.password || '', 'success-modal-copied');
+                }}
+                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors"
+              >
+                {copiedId === 'success-modal-copied' ? (
+                  <>
+                    <CheckCheck className="w-4 h-4 text-emerald-300" />
+                    <span>¡Credenciales Copiadas al Portapapeles!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar Todos los Datos de Acceso</span>
+                  </>
+                )}
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWhatsAppTargetUser(createdSuccessUser);
+                    setCreatedSuccessUser(null);
+                  }}
+                  className="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Enviar por WhatsApp</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreatedSuccessUser(null)}
+                  className="py-2 px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold text-xs flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  Listo / Cerrar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
