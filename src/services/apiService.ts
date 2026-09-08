@@ -10,13 +10,65 @@ export interface UploadResponse {
   uploadedAt: string;
 }
 
+async function safeJson<T = any>(res: Response): Promise<T> {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('La respuesta del servidor no es JSON (posible hosting estático).');
+  }
+  return await res.json();
+}
+
+// Smart fetcher that tries the standard route first and falls back to .php if needed
+async function fetchWithPhpFallback(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  try {
+    const res = await fetch(endpoint, options);
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      return res;
+    }
+    // If not JSON or 404, check if there's a .php version
+    if (!endpoint.includes('.php')) {
+      const phpEndpoint = endpoint.replace('/api/', '/api/').split('?')[0] + '.php' + (endpoint.includes('?') ? '?' + endpoint.split('?')[1] : '');
+      const phpRes = await fetch(phpEndpoint, options);
+      const phpContentType = phpRes.headers.get('content-type') || '';
+      if (phpContentType.includes('application/json')) {
+        return phpRes;
+      }
+    }
+    return res;
+  } catch (e) {
+    if (!endpoint.includes('.php')) {
+      const phpEndpoint = endpoint.replace('/api/', '/api/').split('?')[0] + '.php' + (endpoint.includes('?') ? '?' + endpoint.split('?')[1] : '');
+      return await fetch(phpEndpoint, options);
+    }
+    throw e;
+  }
+}
+
 export class ApiService {
+  // ---- LOGIN WITH SQL DATABASE ----
+  static async login(identifier: string, password: string): Promise<{ success: boolean; user: UserProfile; message?: string }> {
+    const res = await fetchWithPhpFallback(`/api/login?_t=${Date.now()}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      },
+      body: JSON.stringify({ identifier, password }),
+    });
+
+    const data = await safeJson(res);
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al autenticar con el servidor');
+    }
+    return data;
+  }
   // ---- PDF FILE UPLOAD ----
   static async uploadPdf(file: File): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('pdf', file);
 
-    const res = await fetch('/api/upload-pdf', {
+    const res = await fetchWithPhpFallback('/api/upload-pdf', {
       method: 'POST',
       body: formData,
     });
@@ -26,13 +78,13 @@ export class ApiService {
       throw new Error(errData.error || `Error del servidor (${res.status}) al subir el PDF.`);
     }
 
-    return await res.json();
+    return await safeJson<UploadResponse>(res);
   }
 
   // ---- USERS & PASSWORDS ----
   static async getUsers(): Promise<UserProfile[]> {
     try {
-      const res = await fetch(`/api/users?_t=${Date.now()}`, {
+      const res = await fetchWithPhpFallback(`/api/users?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -40,16 +92,16 @@ export class ApiService {
         },
       });
       if (!res.ok) throw new Error('No se pudo obtener usuarios del servidor');
-      const data = await res.json();
+      const data = await safeJson(res);
       return Array.isArray(data) ? data : [];
     } catch (e) {
-      console.warn('Fallo al obtener usuarios del servidor, usando copia local:', e);
+      console.warn('Fallo al obtener usuarios del servidor:', e);
       throw e;
     }
   }
 
   static async saveUsers(users: UserProfile[]): Promise<UserProfile[]> {
-    const res = await fetch(`/api/users?_t=${Date.now()}`, {
+    const res = await fetchWithPhpFallback(`/api/users?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(users),
@@ -57,11 +109,11 @@ export class ApiService {
     if (!res.ok) {
       throw new Error('Error al guardar usuarios en el servidor');
     }
-    return await res.json();
+    return await safeJson(res);
   }
 
   static async saveSingleUser(user: UserProfile): Promise<UserProfile> {
-    const res = await fetch(`/api/users/save?_t=${Date.now()}`, {
+    const res = await fetchWithPhpFallback(`/api/users?_t=${Date.now()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user),
@@ -69,11 +121,11 @@ export class ApiService {
     if (!res.ok) {
       throw new Error('Error al guardar el usuario en el servidor');
     }
-    return await res.json();
+    return await safeJson(res);
   }
 
   static async deleteUser(userId: string): Promise<boolean> {
-    const res = await fetch(`/api/users/${encodeURIComponent(userId)}?_t=${Date.now()}`, {
+    const res = await fetchWithPhpFallback(`/api/users/${encodeURIComponent(userId)}?_t=${Date.now()}`, {
       method: 'DELETE',
     });
     if (!res.ok) {
@@ -85,7 +137,7 @@ export class ApiService {
   // ---- JUDICIAL MEASURES ----
   static async getMeasures(): Promise<JudicialMeasure[]> {
     try {
-      const res = await fetch(`/api/measures?_t=${Date.now()}`, {
+      const res = await fetchWithPhpFallback(`/api/measures?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -93,30 +145,35 @@ export class ApiService {
         },
       });
       if (!res.ok) throw new Error('No se pudo obtener medidas del servidor');
-      const data = await res.json();
+      const data = await safeJson(res);
       return Array.isArray(data) ? data : [];
     } catch (e) {
-      console.warn('Fallo al obtener medidas del servidor, usando copia local:', e);
+      console.warn('Fallo al obtener medidas del servidor:', e);
       throw e;
     }
   }
 
   static async saveMeasures(measures: JudicialMeasure[]): Promise<JudicialMeasure[]> {
-    const res = await fetch(`/api/measures?_t=${Date.now()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(measures),
-    });
-    if (!res.ok) {
-      throw new Error('Error al guardar medidas en el servidor');
+    try {
+      const res = await fetchWithPhpFallback(`/api/measures?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(measures),
+      });
+      if (!res.ok) {
+        throw new Error('Error al guardar medidas en el servidor');
+      }
+      return await safeJson(res);
+    } catch (e) {
+      console.warn('Fallo guardando medidas en backend:', e);
+      return measures;
     }
-    return await res.json();
   }
 
   // ---- PERSON IDENTIFICATIONS ----
   static async getIdentifications(): Promise<IdentifiedPerson[]> {
     try {
-      const res = await fetch(`/api/identifications?_t=${Date.now()}`, {
+      const res = await fetchWithPhpFallback(`/api/identifications?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -124,30 +181,35 @@ export class ApiService {
         },
       });
       if (!res.ok) throw new Error('No se pudo obtener identificaciones del servidor');
-      const data = await res.json();
+      const data = await safeJson(res);
       return Array.isArray(data) ? data : [];
     } catch (e) {
-      console.warn('Fallo al obtener identificaciones del servidor, usando copia local:', e);
+      console.warn('Fallo al obtener identificaciones del servidor:', e);
       throw e;
     }
   }
 
   static async saveIdentifications(identifications: IdentifiedPerson[]): Promise<IdentifiedPerson[]> {
-    const res = await fetch(`/api/identifications?_t=${Date.now()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(identifications),
-    });
-    if (!res.ok) {
-      throw new Error('Error al guardar identificaciones en el servidor');
+    try {
+      const res = await fetchWithPhpFallback(`/api/identifications?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(identifications),
+      });
+      if (!res.ok) {
+        throw new Error('Error al guardar identificaciones en el servidor');
+      }
+      return await safeJson(res);
+    } catch (e) {
+      console.warn('Fallo guardando identificaciones en backend:', e);
+      return identifications;
     }
-    return await res.json();
   }
 
   // ---- DOCUMENTS / REPOSITORY FILES ----
   static async getDocuments(): Promise<DriveFile[]> {
     try {
-      const res = await fetch(`/api/documents?_t=${Date.now()}`, {
+      const res = await fetchWithPhpFallback(`/api/documents?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -155,23 +217,28 @@ export class ApiService {
         },
       });
       if (!res.ok) throw new Error('No se pudo obtener documentos del servidor');
-      const data = await res.json();
+      const data = await safeJson(res);
       return Array.isArray(data) ? data : [];
     } catch (e) {
-      console.warn('Fallo al obtener documentos del servidor, usando copia local:', e);
+      console.warn('Fallo al obtener documentos del servidor:', e);
       throw e;
     }
   }
 
   static async saveDocuments(documents: DriveFile[]): Promise<DriveFile[]> {
-    const res = await fetch('/api/documents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(documents),
-    });
-    if (!res.ok) {
-      throw new Error('Error al guardar documentos en el servidor');
+    try {
+      const res = await fetchWithPhpFallback('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(documents),
+      });
+      if (!res.ok) {
+        throw new Error('Error al guardar documentos en el servidor');
+      }
+      return await safeJson(res);
+    } catch (e) {
+      console.warn('Fallo guardando documentos en backend:', e);
+      return documents;
     }
-    return await res.json();
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Users,
   Shield,
@@ -27,6 +27,13 @@ import {
   Sparkles,
   BadgeCheck,
   MessageCircle,
+  Clock,
+  User,
+  Filter,
+  LayoutGrid,
+  List,
+  FileText,
+  UserCheck,
 } from 'lucide-react';
 import { UserWhatsAppModal } from './UserWhatsAppModal';
 import {
@@ -65,7 +72,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onUpdateDriveConfig,
   onAddAuditLog,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'audit' | 'drive'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive'>('users');
+  
+  // User query monitoring states
+  const [selectedQueryUserId, setSelectedQueryUserId] = useState<string>('all');
+  const [querySearchTerm, setQuerySearchTerm] = useState<string>('');
+  const [queryTypeFilter, setQueryTypeFilter] = useState<'all' | 'dni_persona' | 'medida_judicial' | 'documento'>('all');
+  const [queryViewMode, setQueryViewMode] = useState<'cards' | 'table'>('cards');
+  const [isCopiedReport, setIsCopiedReport] = useState(false);
   
   // User creation modal
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -152,6 +166,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Audit log filter
   const [auditFilter, setAuditFilter] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState<'all' | 'SEARCH' | 'VIEW' | 'UPLOAD' | 'AUTH'>('all');
 
   const handleRoleChange = (userId: string, newRole: RoleType) => {
     setUsers((prev) =>
@@ -355,12 +370,226 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   };
 
-  const filteredLogs = auditLogs.filter(
-    (log) =>
+  const filteredLogs = auditLogs.filter((log) => {
+    if (auditActionFilter === 'SEARCH') {
+      const isSearch =
+        log.action === 'SEARCH' ||
+        log.details.toLowerCase().includes('búsqueda') ||
+        log.details.toLowerCase().includes('consulta') ||
+        log.details.toLowerCase().includes('dni');
+      if (!isSearch) return false;
+    } else if (auditActionFilter === 'VIEW') {
+      if (log.action !== 'VIEW') return false;
+    } else if (auditActionFilter === 'UPLOAD') {
+      if (log.action !== 'UPLOAD') return false;
+    } else if (auditActionFilter === 'AUTH') {
+      const isAuth =
+        log.action.includes('AUTH') ||
+        log.action.includes('LOGIN') ||
+        log.action.includes('PASSWORD') ||
+        log.action.includes('DRIVE');
+      if (!isAuth) return false;
+    }
+
+    return (
       log.userName.toLowerCase().includes(auditFilter.toLowerCase()) ||
       log.details.toLowerCase().includes(auditFilter.toLowerCase()) ||
       log.action.toLowerCase().includes(auditFilter.toLowerCase())
-  );
+    );
+  });
+
+  // Helper to determine if an audit log is a user query/search
+  const isQueryLog = (log: AuditLog) => {
+    return (
+      log.action === 'SEARCH' ||
+      log.action === 'VIEW' ||
+      log.action === 'DOWNLOAD' ||
+      log.details.toLowerCase().includes('búsqueda') ||
+      log.details.toLowerCase().includes('consulta') ||
+      log.details.toLowerCase().includes('visualiz') ||
+      log.details.toLowerCase().includes('dni') ||
+      log.details.toLowerCase().includes('oficio')
+    );
+  };
+
+  // All query/search audit logs
+  const allQueryLogs = useMemo(() => {
+    return auditLogs.filter(isQueryLog);
+  }, [auditLogs]);
+
+  // Aggregate stats per user who made queries
+  const usersWithQueries = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        id: string;
+        name: string;
+        role: RoleType;
+        username: string;
+        badgeNumber: string;
+        department: string;
+        totalQueries: number;
+        dniQueriesCount: number;
+        measuresQueriesCount: number;
+        documentQueriesCount: number;
+        lastQueryTimestamp: string;
+        lastQueryDetails: string;
+      }
+    > = {};
+
+    allQueryLogs.forEach((log) => {
+      const key = log.userId || log.userName;
+      if (!map[key]) {
+        const fullUser = users.find((u) => u.id === log.userId || u.name === log.userName);
+        map[key] = {
+          id: log.userId,
+          name: log.userName,
+          role: log.userRole,
+          username: fullUser?.username || log.userName.toLowerCase().replace(/\s+/g, '.'),
+          badgeNumber: fullUser?.badgeNumber || 'LP-S/D',
+          department: fullUser?.department || 'Comisaría del Menor y Violencia Familiar',
+          totalQueries: 0,
+          dniQueriesCount: 0,
+          measuresQueriesCount: 0,
+          documentQueriesCount: 0,
+          lastQueryTimestamp: log.timestamp,
+          lastQueryDetails: log.details,
+        };
+      }
+
+      const item = map[key];
+      item.totalQueries += 1;
+      const lowerText = (log.details + ' ' + (log.targetFileName || '')).toLowerCase();
+      if (lowerText.includes('dni') || lowerText.includes('persona') || lowerText.includes('identifica')) {
+        item.dniQueriesCount += 1;
+      } else if (
+        lowerText.includes('medida') ||
+        lowerText.includes('oficio') ||
+        lowerText.includes('cautelar') ||
+        lowerText.includes('expte')
+      ) {
+        item.measuresQueriesCount += 1;
+      } else {
+        item.documentQueriesCount += 1;
+      }
+
+      if (new Date(log.timestamp) > new Date(item.lastQueryTimestamp)) {
+        item.lastQueryTimestamp = log.timestamp;
+        item.lastQueryDetails = log.details;
+      }
+    });
+
+    return Object.values(map).sort((a, b) => b.totalQueries - a.totalQueries);
+  }, [allQueryLogs, users]);
+
+  // Filtered queries based on active filters
+  const filteredQueryLogs = useMemo(() => {
+    return allQueryLogs.filter((log) => {
+      // Filter by selected user
+      if (selectedQueryUserId !== 'all') {
+        const matchUser = log.userId === selectedQueryUserId || log.userName === selectedQueryUserId;
+        if (!matchUser) return false;
+      }
+
+      // Filter by query type
+      const lowerText = (log.details + ' ' + (log.targetFileName || '')).toLowerCase();
+      if (queryTypeFilter === 'dni_persona') {
+        if (!lowerText.includes('dni') && !lowerText.includes('persona') && !lowerText.includes('identifica')) {
+          return false;
+        }
+      } else if (queryTypeFilter === 'medida_judicial') {
+        if (
+          !lowerText.includes('medida') &&
+          !lowerText.includes('oficio') &&
+          !lowerText.includes('cautelar') &&
+          !lowerText.includes('expte')
+        ) {
+          return false;
+        }
+      } else if (queryTypeFilter === 'documento') {
+        if (log.action !== 'VIEW' && log.action !== 'DOWNLOAD' && !lowerText.includes('pdf')) {
+          return false;
+        }
+      }
+
+      // Filter by text search
+      if (querySearchTerm.trim()) {
+        const term = querySearchTerm.toLowerCase();
+        const match =
+          log.userName.toLowerCase().includes(term) ||
+          log.details.toLowerCase().includes(term) ||
+          (log.targetFileName && log.targetFileName.toLowerCase().includes(term)) ||
+          log.action.toLowerCase().includes(term);
+        if (!match) return false;
+      }
+
+      return true;
+    });
+  }, [allQueryLogs, selectedQueryUserId, queryTypeFilter, querySearchTerm]);
+
+  // Overall statistics for queries
+  const queryStats = useMemo(() => {
+    let dniCount = 0;
+    let measuresCount = 0;
+    let documentCount = 0;
+    allQueryLogs.forEach((log) => {
+      const lower = (log.details + ' ' + (log.targetFileName || '')).toLowerCase();
+      if (lower.includes('dni') || lower.includes('persona') || lower.includes('identifica')) {
+        dniCount++;
+      } else if (lower.includes('medida') || lower.includes('oficio') || lower.includes('cautelar') || lower.includes('expte')) {
+        measuresCount++;
+      } else {
+        documentCount++;
+      }
+    });
+    return {
+      total: allQueryLogs.length,
+      officersCount: usersWithQueries.length,
+      dniCount,
+      measuresCount,
+      documentCount,
+    };
+  }, [allQueryLogs, usersWithQueries]);
+
+  const handleCopyQueryReport = () => {
+    const lines: string[] = [
+      '===========================================================',
+      'POLICÍA DE ENTRE RÍOS - COMISARÍA DEL MENOR Y VIOLENCIA FAMILIAR',
+      'INFORME OFICIAL DE AUDITORÍA Y TRAZABILIDAD DE CONSULTAS',
+      `Fecha de emisión: ${new Date().toLocaleString('es-AR')}`,
+      `Total de consultas registradas: ${allQueryLogs.length}`,
+      `Efectivos policiales que realizaron consultas: ${usersWithQueries.length}`,
+      '===========================================================',
+      '',
+      'RESUMEN POR EFECTIVO POLICIAL:',
+    ];
+
+    usersWithQueries.forEach((u, i) => {
+      lines.push(
+        `${i + 1}. ${u.name} (Legajo: ${u.badgeNumber}, Rol: ${u.role.toUpperCase()}) - ${u.totalQueries} consultas [DNI: ${u.dniQueriesCount} | Medidas: ${u.measuresQueriesCount} | Docs: ${u.documentQueriesCount}]`
+      );
+      lines.push(`   Última consulta: ${formatDate(u.lastQueryTimestamp)} - ${u.lastQueryDetails}`);
+    });
+
+    lines.push('');
+    lines.push('HISTORIAL RECIENTE DE CONSULTAS FILTRADAS:');
+    filteredQueryLogs.slice(0, 50).forEach((q, i) => {
+      lines.push(
+        `[${formatDate(q.timestamp)}] [${q.userName} / ${q.userRole}] [${q.action}]: ${q.details}${
+          q.targetFileName ? ` (Doc: ${q.targetFileName})` : ''
+        }`
+      );
+    });
+
+    lines.push('');
+    lines.push('===========================================================');
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(lines.join('\n'));
+      setIsCopiedReport(true);
+      setTimeout(() => setIsCopiedReport(false), 3000);
+    }
+  };
 
   const getRoleBadge = (role: RoleType) => {
     switch (role) {
@@ -415,6 +644,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           >
             <Users className="w-3.5 h-3.5" />
             <span>Usuarios & Roles</span>
+          </button>
+
+          {/* SUBTAB: CONSULTAS DE USUARIOS */}
+          <button
+            onClick={() => setActiveSubTab('queries')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSubTab === 'queries'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Consultas de Usuarios</span>
+            {allQueryLogs.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-bold">
+                {allQueryLogs.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -757,7 +1004,527 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* TAB 2: AUDITORÍA DE ACCESOS */}
+      {/* TAB: CONSULTAS DE USUARIOS */}
+      {activeSubTab === 'queries' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-500/20">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Control y Auditoría de Consultas Policiales
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Supervisión de efectivos y usuarios que realizaron búsquedas de medidas cautelares, verificación de DNI, personas identificadas y expedientes judiciales.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyQueryReport}
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
+                  title="Copiar informe completo de consultas para expediente de auditoría"
+                >
+                  {isCopiedReport ? (
+                    <>
+                      <CheckCheck className="w-4 h-4 text-emerald-300" />
+                      <span>¡Informe Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copiar Informe de Consultas</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick KPI Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold uppercase">
+                    Total Consultas
+                  </span>
+                  <Search className="w-4 h-4 text-blue-500" />
+                </div>
+                <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 font-mono mt-1">
+                  {queryStats.total}
+                </div>
+                <span className="text-[10px] text-slate-400">búsquedas y aperturas</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold uppercase">
+                    Efectivos Activos
+                  </span>
+                  <Users className="w-4 h-4 text-indigo-500" />
+                </div>
+                <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono mt-1">
+                  {queryStats.officersCount}
+                </div>
+                <span className="text-[10px] text-slate-400">usuarios registraron actividad</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold uppercase">
+                    DNI / Personas
+                  </span>
+                  <UserCheck className="w-4 h-4 text-emerald-500" />
+                </div>
+                <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+                  {queryStats.dniCount}
+                </div>
+                <span className="text-[10px] text-slate-400">verificaciones de ciudadanos</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold uppercase">
+                    Medidas Judiciales
+                  </span>
+                  <Shield className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 font-mono mt-1">
+                  {queryStats.measuresCount}
+                </div>
+                <span className="text-[10px] text-slate-400">cautelares y oficios</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Usuarios / Efectivos que realizaron consultas */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-blue-500" />
+                  <span>Efectivos Policiales que Realizaron Consultas</span>
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Selecciona un funcionario para filtrar de forma instantánea el historial de sus consultas
+                </p>
+              </div>
+
+              {selectedQueryUserId !== 'all' && (
+                <button
+                  onClick={() => setSelectedQueryUserId('all')}
+                  className="px-2.5 py-1 rounded-lg text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors font-medium flex items-center gap-1 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Ver todos los efectivos</span>
+                </button>
+              )}
+            </div>
+
+            {/* Officer Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {usersWithQueries.map((u) => {
+                const isSelected = selectedQueryUserId === u.id || selectedQueryUserId === u.name;
+                return (
+                  <div
+                    key={u.id || u.name}
+                    onClick={() => setSelectedQueryUserId(isSelected ? 'all' : u.id || u.name)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                      isSelected
+                        ? 'bg-blue-50/90 dark:bg-blue-950/40 border-blue-500 shadow-md shadow-blue-900/10 ring-2 ring-blue-500/20'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      {/* Top: Name & Role */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                            {u.name}
+                          </h5>
+                          <span className="text-[11px] text-slate-400 block truncate">
+                            @{u.username}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 border ${getRoleBadge(
+                            u.role
+                          )}`}
+                        >
+                          {getRoleLabel(u.role)}
+                        </span>
+                      </div>
+
+                      {/* Middle: Department & Badge */}
+                      <div className="mt-2.5 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
+                        <div className="flex items-center gap-1 font-mono text-slate-600 dark:text-slate-300 font-semibold">
+                          <span>Legajo:</span>
+                          <span>{u.badgeNumber}</span>
+                        </div>
+                        <div className="truncate text-[10px] text-slate-400" title={u.department}>
+                          {u.department}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats Pill & Last Query */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-slate-400">Total Consultas:</span>
+                        <span className="font-extrabold text-blue-600 dark:text-blue-400 font-mono text-sm">
+                          {u.totalQueries}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                        <span className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800">
+                          {u.dniQueriesCount} DNI
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800">
+                          {u.measuresQueriesCount} Medidas
+                        </span>
+                      </div>
+
+                      <div className="text-[10px] text-slate-400 truncate flex items-center gap-1 pt-1">
+                        <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                        <span className="truncate">Última: {formatDate(u.lastQueryTimestamp)}</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={`w-full py-1 rounded-lg text-xs font-semibold text-center transition-colors cursor-pointer mt-1 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {isSelected ? 'Mostrando consultas ✓' : 'Filtrar consultas'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section: Tabla y Tarjetas de Consultas */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+            {/* Controls Bar */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex flex-wrap items-center gap-2 flex-1">
+                {/* Search input */}
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={querySearchTerm}
+                    onChange={(e) => setQuerySearchTerm(e.target.value)}
+                    placeholder="Buscar por término, DNI, nombre, oficio..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  {querySearchTerm && (
+                    <button
+                      onClick={() => setQuerySearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter by Officer */}
+                <select
+                  value={selectedQueryUserId}
+                  onChange={(e) => setSelectedQueryUserId(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Todos los efectivos ({allQueryLogs.length})</option>
+                  {usersWithQueries.map((u) => (
+                    <option key={u.id || u.name} value={u.id || u.name}>
+                      {u.name} ({u.totalQueries} consultas)
+                    </option>
+                  ))}
+                </select>
+
+                {/* Filter by Type */}
+                <select
+                  value={queryTypeFilter}
+                  onChange={(e) => setQueryTypeFilter(e.target.value as any)}
+                  className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Todos los tipos de consulta</option>
+                  <option value="dni_persona">Búsquedas de DNI / Personas</option>
+                  <option value="medida_judicial">Medidas Judiciales / Oficios</option>
+                  <option value="documento">Visualización de Oficios PDF</option>
+                </select>
+
+                {(selectedQueryUserId !== 'all' || queryTypeFilter !== 'all' || querySearchTerm) && (
+                  <button
+                    onClick={() => {
+                      setSelectedQueryUserId('all');
+                      setQueryTypeFilter('all');
+                      setQuerySearchTerm('');
+                    }}
+                    className="px-2.5 py-1.5 text-xs rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Limpiar</span>
+                  </button>
+                )}
+              </div>
+
+              {/* View Switcher: Cards vs Table */}
+              <div className="flex items-center justify-between sm:justify-end gap-2">
+                <span className="text-xs text-slate-400">
+                  Mostrando <strong>{filteredQueryLogs.length}</strong> consultas
+                </span>
+
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => setQueryViewMode('cards')}
+                    className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                      queryViewMode === 'cards'
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-xs'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                    }`}
+                    title="Vista en tarjetas"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setQueryViewMode('table')}
+                    className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                      queryViewMode === 'table'
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-xs'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                    }`}
+                    title="Vista en tabla"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Rendering */}
+            {filteredQueryLogs.length > 0 ? (
+              queryViewMode === 'cards' ? (
+                /* CARDS VIEW OF QUERIES */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {filteredQueryLogs.map((log) => {
+                    const lowerText = (log.details + ' ' + (log.targetFileName || '')).toLowerCase();
+                    const isDni =
+                      lowerText.includes('dni') || lowerText.includes('persona') || lowerText.includes('identifica');
+                    const isMedida =
+                      lowerText.includes('medida') ||
+                      lowerText.includes('oficio') ||
+                      lowerText.includes('cautelar') ||
+                      lowerText.includes('expte');
+
+                    return (
+                      <div
+                        key={log.id}
+                        className="bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-xs"
+                      >
+                        {/* Top: Query Category & Time */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                              isDni
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60'
+                                : isMedida
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
+                            }`}
+                          >
+                            {isDni && <UserCheck className="w-3 h-3" />}
+                            {isMedida && <Shield className="w-3 h-3" />}
+                            {!isDni && !isMedida && <FileText className="w-3 h-3" />}
+                            <span>
+                              {isDni
+                                ? 'Búsqueda DNI / Persona'
+                                : isMedida
+                                ? 'Consulta Medida Judicial'
+                                : 'Visualización Oficio'}
+                            </span>
+                          </span>
+
+                          <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>{formatDate(log.timestamp)}</span>
+                          </div>
+                        </div>
+
+                        {/* Officer Info */}
+                        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+                          <div className="w-7 h-7 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
+                            {log.userName.charAt(0)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                {log.userName}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0 border ${getRoleBadge(
+                                  log.userRole
+                                )}`}
+                              >
+                                {getRoleLabel(log.userRole)}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 block truncate">
+                              Comisaría del Menor y Violencia Familiar
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Query Details */}
+                        <div className="p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800/80 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            Detalle de la Consulta
+                          </span>
+                          <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-mono">
+                            {log.details}
+                          </p>
+
+                          {log.targetFileName && (
+                            <div className="pt-1.5 mt-1 border-t border-slate-200/60 dark:border-slate-800 flex items-center gap-1.5 text-xs text-blue-500 truncate font-mono">
+                              <FileText className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{log.targetFileName}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Status Footer */}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <span className="font-mono text-[10px] text-slate-400 uppercase">
+                            Acción: {log.action}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              log.status === 'SUCCESS'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                            }`}
+                          >
+                            {log.status === 'SUCCESS' ? 'PERMITIDO' : 'DENEGADO'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* TABLE VIEW OF QUERIES */
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-100 dark:border-slate-800 text-[11px] uppercase tracking-wider bg-slate-50/50 dark:bg-slate-800/30">
+                        <th className="py-2.5 px-3">Fecha y Hora</th>
+                        <th className="py-2.5 px-3">Efectivo Policial</th>
+                        <th className="py-2.5 px-3">Tipo / Acción</th>
+                        <th className="py-2.5 px-3">Término / Detalle de Consulta</th>
+                        <th className="py-2.5 px-3">Oficio / Archivo</th>
+                        <th className="py-2.5 px-3 text-right">Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredQueryLogs.map((log) => {
+                        const lowerText = (log.details + ' ' + (log.targetFileName || '')).toLowerCase();
+                        const isDni =
+                          lowerText.includes('dni') || lowerText.includes('persona') || lowerText.includes('identifica');
+                        const isMedida =
+                          lowerText.includes('medida') ||
+                          lowerText.includes('oficio') ||
+                          lowerText.includes('cautelar') ||
+                          lowerText.includes('expte');
+
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                            <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                              {formatDate(log.timestamp)}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                                <span>{log.userName}</span>
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${getRoleBadge(
+                                    log.userRole
+                                  )}`}
+                                >
+                                  {getRoleLabel(log.userRole)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  isDni
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                                    : isMedida
+                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                }`}
+                              >
+                                {isDni && <UserCheck className="w-2.5 h-2.5" />}
+                                {isMedida && <Shield className="w-2.5 h-2.5" />}
+                                <span>{isDni ? 'DNI / Persona' : isMedida ? 'Medida Judicial' : log.action}</span>
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300 font-mono max-w-md">
+                              {log.details}
+                            </td>
+                            <td className="py-2.5 px-3 text-blue-500 font-mono text-[11px] truncate max-w-xs">
+                              {log.targetFileName ? `📄 ${log.targetFileName}` : '-'}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  log.status === 'SUCCESS'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                }`}
+                              >
+                                {log.status === 'SUCCESS' ? 'PERMITIDO' : 'DENEGADO'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : (
+              /* Empty Query State */
+              <div className="p-8 text-center space-y-2">
+                <Search className="w-8 h-8 text-slate-400 mx-auto" />
+                <h5 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  No se encontraron consultas registradas con este filtro
+                </h5>
+                <p className="text-xs text-slate-400">
+                  Intenta cambiar el efectivo seleccionado o limpiar el término de búsqueda.
+                </p>
+                <button
+                  onClick={() => {
+                    setSelectedQueryUserId('all');
+                    setQueryTypeFilter('all');
+                    setQuerySearchTerm('');
+                  }}
+                  className="mt-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer"
+                >
+                  Restablecer Filtros
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {activeSubTab === 'audit' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -771,15 +1538,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </p>
             </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={auditFilter}
-                onChange={(e) => setAuditFilter(e.target.value)}
-                placeholder="Filtrar logs..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
-              />
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <select
+                value={auditActionFilter}
+                onChange={(e) => setAuditActionFilter(e.target.value as any)}
+                className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Todas las acciones</option>
+                <option value="SEARCH">🔍 Solo Consultas / Búsquedas</option>
+                <option value="VIEW">👁️ Visualizaciones</option>
+                <option value="UPLOAD">📤 Subidas de archivo</option>
+                <option value="AUTH">🔒 Autenticación & Seguridad</option>
+              </select>
+
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={auditFilter}
+                  onChange={(e) => setAuditFilter(e.target.value)}
+                  placeholder="Filtrar por texto..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
+                />
+                {auditFilter && (
+                  <button
+                    onClick={() => setAuditFilter('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

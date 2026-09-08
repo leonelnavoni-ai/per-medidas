@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   FolderOpen,
   Upload,
@@ -62,38 +62,16 @@ export default function App() {
   // Navigation
   const [currentTab, setCurrentTab] = useState<'measures' | 'identifications' | 'files' | 'admin'>('measures');
 
-  // Default Judicial Measures State (Official Database)
-  const [measures, setMeasures] = useState<JudicialMeasure[]>(() => {
-    try {
-      const saved = localStorage.getItem('judicial_measures_data');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Error reading stored measures:', e);
-    }
-    return DEFAULT_JUDICIAL_MEASURES;
-  });
+  // Default Judicial Measures State (Stored on Web Server Database)
+  const [measures, setMeasures] = useState<JudicialMeasure[]>(DEFAULT_JUDICIAL_MEASURES);
 
   // Measure Modal State
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
   const [measureModalMode, setMeasureModalMode] = useState<'create' | 'edit'>('create');
   const [activeEditingMeasure, setActiveEditingMeasure] = useState<JudicialMeasure | null>(null);
 
-  // Person Identification State (Official Police Controls)
-  const [identifications, setIdentifications] = useState<IdentifiedPerson[]>(() => {
-    try {
-      const saved = localStorage.getItem('police_person_identifications');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Error reading stored identifications:', e);
-    }
-    return INITIAL_IDENTIFIED_PERSONS;
-  });
+  // Person Identification State (Stored on Web Server Database)
+  const [identifications, setIdentifications] = useState<IdentifiedPerson[]>(INITIAL_IDENTIFIED_PERSONS);
 
   // Person Modal State
   const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
@@ -106,79 +84,19 @@ export default function App() {
     matchingMeasures: JudicialMeasure[];
   } | null>(null);
 
-  // Documents State (General PDFs)
+  // Documents State (General PDFs stored on Web Server)
   const [files, setFiles] = useState<DriveFile[]>(() => getInitialFiles());
   const [activeViewingFile, setActiveViewingFile] = useState<DriveFile | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  // Users & RBAC State (with local persistence)
-  const [users, setUsers] = useState<UserProfile[]>(() => {
-    try {
-      const saved = localStorage.getItem('police_app_users');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          let hasAdmin = false;
-          const mapped = parsed.map((u: UserProfile) => {
-            if (
-              u.id === 'usr-1' ||
-              u.role === 'superadmin' ||
-              u.username === 'admin' ||
-              (u.email && u.email.toLowerCase() === 'leonel.navoni@gmail.com')
-            ) {
-              hasAdmin = true;
-              return {
-                ...u,
-                username: 'admin',
-                password: 'almorial1',
-                status: 'active',
-              };
-            }
-            return u;
-          });
-          if (!hasAdmin) {
-            mapped.unshift(INITIAL_USERS[0]);
-          }
-          return mapped;
-        }
-      }
-    } catch (e) {
-      console.warn('Error loading users from localStorage:', e);
-    }
-    return INITIAL_USERS;
-  });
+  // Users & RBAC State (Stored on Web Server SQL Database)
+  const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
-      const activeId = localStorage.getItem('police_app_active_user_id');
-      const saved = localStorage.getItem('police_app_users');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          if (activeId) {
-            const found = parsed.find((u: UserProfile) => u.id === activeId);
-            if (found) {
-              if (
-                found.id === 'usr-1' ||
-                found.role === 'superadmin' ||
-                found.username === 'admin' ||
-                (found.email && found.email.toLowerCase() === 'leonel.navoni@gmail.com')
-              ) {
-                return { ...found, username: 'admin', password: 'almorial1', status: 'active' };
-              }
-              return found;
-            }
-          }
-          const first = parsed[0];
-          if (
-            first.id === 'usr-1' ||
-            first.role === 'superadmin' ||
-            first.username === 'admin' ||
-            (first.email && first.email.toLowerCase() === 'leonel.navoni@gmail.com')
-          ) {
-            return { ...first, username: 'admin', password: 'almorial1', status: 'active' };
-          }
-          return first;
-        }
+      const activeId = sessionStorage.getItem('police_app_active_user_id');
+      if (activeId) {
+        const found = INITIAL_USERS.find((u) => u.id === activeId);
+        if (found) return found;
       }
     } catch (e) {}
     return INITIAL_USERS[0];
@@ -187,20 +105,11 @@ export default function App() {
   // Authentication State - Defaults strictly to false so entering the application requires login
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
-      // 1. Check current browser tab session
       const sessionAuth = sessionStorage.getItem('police_app_authenticated');
       if (sessionAuth === 'true') return true;
-
-      // 2. Check if the user explicitly requested to remember login on this device
-      const remember = localStorage.getItem('police_app_remember_login');
-      const localAuth = localStorage.getItem('police_app_authenticated');
-      if (remember === 'true' && localAuth === 'true') {
-        return true;
-      }
     } catch (e) {
       console.warn('Error reading auth state:', e);
     }
-    // By default, entry to the system strictly requires user authentication
     return false;
   });
 
@@ -208,40 +117,28 @@ export default function App() {
   const [serverOnline, setServerOnline] = useState(true);
 
   // Sync state with server
+  const isSyncingRef = useRef(false);
   const syncWithServer = useCallback(async (showNotice = false) => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     setIsServerSyncing(true);
     try {
       // 1. Fetch users and passwords from server
       const serverUsers = await ApiService.getUsers();
       if (Array.isArray(serverUsers) && serverUsers.length > 0) {
         setUsers(serverUsers);
-        try {
-          localStorage.setItem('police_app_users', JSON.stringify(serverUsers));
-        } catch (e) {
-          console.warn('Error saving to localStorage:', e);
-        }
       }
 
       // 2. Fetch measures from server
       const serverMeasures = await ApiService.getMeasures();
       if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
         setMeasures(serverMeasures);
-        try {
-          localStorage.setItem('judicial_measures_data', JSON.stringify(serverMeasures));
-        } catch (e) {
-          console.warn('Error saving measures:', e);
-        }
       }
 
       // 3. Fetch identifications from server
       const serverIdents = await ApiService.getIdentifications();
       if (Array.isArray(serverIdents) && serverIdents.length > 0) {
         setIdentifications(serverIdents);
-        try {
-          localStorage.setItem('police_person_identifications', JSON.stringify(serverIdents));
-        } catch (e) {
-          console.warn('Error saving identifications:', e);
-        }
       }
 
       // 4. Fetch general documents from server
@@ -263,10 +160,11 @@ export default function App() {
       console.warn('Aviso de sincronización con servidor:', err);
       setServerOnline(false);
       if (showNotice) {
-        showToast('Modo local: no se pudo conectar con el servidor central.', 'info');
+        showToast('Aviso: no se pudo conectar con el servidor web central.', 'warning');
       }
     } finally {
       setIsServerSyncing(false);
+      isSyncingRef.current = false;
     }
   }, []);
 
@@ -293,16 +191,11 @@ export default function App() {
     };
   }, [syncWithServer]);
 
-  // Safe user update function that pushes changes to server explicitly without risk of overwriting on mount
+  // Safe user update function that pushes changes to web server database explicitly
   const updateUsersState = useCallback((updater: React.SetStateAction<UserProfile[]>) => {
     setUsers((prevUsers) => {
       const nextUsers = typeof updater === 'function' ? updater(prevUsers) : updater;
-      try {
-        localStorage.setItem('police_app_users', JSON.stringify(nextUsers));
-      } catch (e) {
-        console.warn('Error saving users to localStorage:', e);
-      }
-      // Send to server
+      // Send directly to web server database
       ApiService.saveUsers(nextUsers).catch((err) =>
         console.warn('Error al sincronizar usuarios con el servidor:', err)
       );
@@ -310,21 +203,20 @@ export default function App() {
     });
   }, []);
 
-  // Keep currentUser in sync if updated in users list
+  // Keep currentUser in sync if updated in users list without circular triggers
   useEffect(() => {
-    const updated = users.find((u) => u.id === currentUser.id);
-    if (updated) {
+    setCurrentUser((prevUser) => {
+      const updated = users.find((u) => u.id === prevUser.id);
+      if (!updated) return prevUser;
       const hasChanged =
-        updated.name !== currentUser.name ||
-        updated.email !== currentUser.email ||
-        updated.role !== currentUser.role ||
-        updated.status !== currentUser.status ||
-        JSON.stringify(updated.customPermissions) !== JSON.stringify(currentUser.customPermissions);
-      if (hasChanged) {
-        setCurrentUser(updated);
-      }
-    }
-  }, [users, currentUser]);
+        updated.name !== prevUser.name ||
+        updated.email !== prevUser.email ||
+        updated.role !== prevUser.role ||
+        updated.status !== prevUser.status ||
+        JSON.stringify(updated.customPermissions) !== JSON.stringify(prevUser.customPermissions);
+      return hasChanged ? updated : prevUser;
+    });
+  }, [users]);
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
@@ -546,7 +438,7 @@ export default function App() {
   const handleSwitchUser = (selectedUser: UserProfile) => {
     setCurrentUser(selectedUser);
     try {
-      localStorage.setItem('police_app_active_user_id', selectedUser.id);
+      sessionStorage.setItem('police_app_active_user_id', selectedUser.id);
     } catch (e) {}
     showToast(
       `Sesión cambiada a ${selectedUser.name} (Rol: ${selectedUser.role.toUpperCase()})`,
@@ -555,21 +447,12 @@ export default function App() {
   };
 
   // Authentication Handlers
-  const handleLogin = (user: UserProfile, rememberSession: boolean) => {
+  const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
     try {
       sessionStorage.setItem('police_app_authenticated', 'true');
       sessionStorage.setItem('police_app_active_user_id', user.id);
-      if (rememberSession) {
-        localStorage.setItem('police_app_remember_login', 'true');
-        localStorage.setItem('police_app_authenticated', 'true');
-        localStorage.setItem('police_app_active_user_id', user.id);
-      } else {
-        localStorage.removeItem('police_app_remember_login');
-        localStorage.removeItem('police_app_authenticated');
-        localStorage.removeItem('police_app_active_user_id');
-      }
     } catch (e) {
       console.warn('Failed to save session state:', e);
     }
@@ -582,9 +465,6 @@ export default function App() {
     try {
       sessionStorage.removeItem('police_app_authenticated');
       sessionStorage.removeItem('police_app_active_user_id');
-      localStorage.removeItem('police_app_authenticated');
-      localStorage.removeItem('police_app_remember_login');
-      localStorage.removeItem('police_app_active_user_id');
     } catch (e) {
       console.warn('Failed to clear session state:', e);
     }
@@ -648,54 +528,56 @@ export default function App() {
     }
   };
 
+  // Helper to update files state and persist to web server repository
+  const updateFilesState = (updater: (prev: DriveFile[]) => DriveFile[]) => {
+    setFiles((prev) => {
+      const nextFiles = updater(prev);
+      // Persist directly to web server
+      ApiService.saveDocuments(nextFiles).catch((err) =>
+        console.warn('Error al guardar documentos en el servidor web:', err)
+      );
+      return nextFiles;
+    });
+  };
+
   // Delete PDF
   const handleDeletePdf = (file: DriveFile) => {
     if (!currentPermissions.canDelete) {
       showToast('Acceso denegado: No cuentas con permisos para eliminar documentos.', 'error');
       return;
     }
-    if (confirm(`¿Estás seguro de eliminar "${file.name}" del repositorio?`)) {
-      setFiles((prev) => prev.filter((f) => f.id !== file.id));
-      addAuditLog('DELETE', `Documento eliminado del repositorio`, file.name, 'SUCCESS');
-      showToast(`Archivo "${file.name}" eliminado correctamente.`, 'success');
+    if (confirm(`¿Estás seguro de eliminar "${file.name}" del repositorio del servidor?`)) {
+      updateFilesState((prev) => prev.filter((f) => f.id !== file.id));
+      addAuditLog('DELETE', `Documento eliminado del repositorio del servidor`, file.name, 'SUCCESS');
+      showToast(`Archivo "${file.name}" eliminado correctamente del servidor.`, 'success');
     }
   };
 
   // Add Uploaded PDF File
   const handleAddFile = (newFile: DriveFile) => {
-    setFiles((prev) => [newFile, ...prev]);
+    updateFilesState((prev) => [newFile, ...prev]);
     addAuditLog(
       'UPLOAD',
-      `Nuevo archivo PDF alojado e indexado (${newFile.category})`,
+      `Nuevo archivo PDF alojado en servidor e indexado (${newFile.category})`,
       newFile.name,
       'SUCCESS'
     );
-    showToast(`PDF "${newFile.name}" alojado e indexado correctamente.`, 'success');
+    showToast(`PDF "${newFile.name}" alojado en el servidor e indexado correctamente.`, 'success');
   };
 
-  // State update helper for Judicial Measures with server and local persistence
+  // State update helper for Judicial Measures with direct web server persistence
   const updateMeasuresState = (newMeasures: JudicialMeasure[]) => {
     setMeasures(newMeasures);
-    try {
-      localStorage.setItem('judicial_measures_data', JSON.stringify(newMeasures));
-    } catch (e) {
-      console.warn('Could not persist measures to localStorage:', e);
-    }
-    // Persist to server
+    // Persist directly to web server database
     ApiService.saveMeasures(newMeasures).catch((err) =>
       console.warn('Error al guardar medidas en el servidor:', err)
     );
   };
 
-  // State update helper for Identified Persons with server and local persistence
+  // State update helper for Identified Persons with direct web server persistence
   const updateIdentificationsState = (newIdentifications: IdentifiedPerson[]) => {
     setIdentifications(newIdentifications);
-    try {
-      localStorage.setItem('police_person_identifications', JSON.stringify(newIdentifications));
-    } catch (e) {
-      console.warn('Could not persist identifications to localStorage:', e);
-    }
-    // Persist to server
+    // Persist directly to web server database
     ApiService.saveIdentifications(newIdentifications).catch((err) =>
       console.warn('Error al guardar identificaciones en el servidor:', err)
     );
@@ -1125,7 +1007,7 @@ export default function App() {
         <LoginScreen
           users={users}
           onLogin={handleLogin}
-          onRefreshUsers={() => syncWithServer(false)}
+          isServerOnline={serverOnline}
         />
       </div>
     );

@@ -22,6 +22,8 @@ import {
   Building,
   CheckCircle2,
   SlidersHorizontal,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { IdentifiedPerson, JudicialMeasure, PermissionSet, UserProfile } from '../types';
 
@@ -50,6 +52,7 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
   const [searchQuery, setSearchQuery] = useState('');
   const [filterEstado, setFilterEstado] = useState<string>('all');
   const [filterDatePreset, setFilterDatePreset] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedPersonForDetail, setSelectedPersonForDetail] = useState<IdentifiedPerson | null>(null);
 
   // Helper to find matching judicial measures for any identified person
@@ -139,6 +142,21 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
       return true;
     }).sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
   }, [identifications, searchQuery, filterEstado, filterDatePreset]);
+
+  const getEstadoBadgeStyle = (estado: string) => {
+    switch (estado) {
+      case 'Sin impedimento':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+      case 'Con medida cautelar':
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+      case 'Pedido de captura / paradero':
+        return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+      case 'Demorado':
+        return 'bg-red-500/15 text-red-300 border-red-500/30';
+      default:
+        return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -288,18 +306,246 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
             </button>
           )}
 
-          <div className="ml-auto text-slate-400 text-xs">
-            Mostrando <strong>{filteredIdentifications.length}</strong> de {identifications.length} registros
+          {/* View Switcher: Cards vs Table */}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center bg-slate-950 border border-slate-800 p-0.5 rounded-lg text-xs">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`px-2.5 py-1 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer font-medium ${
+                  viewMode === 'cards'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Vista tipo Tarjetas"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Tarjetas</span>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-2.5 py-1 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer font-medium ${
+                  viewMode === 'table'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Vista tipo Tabla"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Tabla</span>
+              </button>
+            </div>
+
+            <div className="text-slate-400 text-xs hidden sm:block">
+              <strong>{filteredIdentifications.length}</strong> de {identifications.length}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Table / Cards Content */}
       {filteredIdentifications.length > 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          {/* Desktop Table View */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+        viewMode === 'cards' ? (
+          /* Results View: Card Mode */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredIdentifications.map((person) => {
+              const matchingMeasures = getMatchingMeasures(person);
+              const hasMeasuresAlert = matchingMeasures.length > 0;
+              const dateObj = new Date(person.fechaHora);
+              const dateFormatted = !isNaN(dateObj.getTime())
+                ? dateObj.toLocaleDateString('es-AR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  }) +
+                  ' ' +
+                  dateObj.toLocaleTimeString('es-AR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : person.fechaHora;
+
+              return (
+                <div
+                  key={person.id}
+                  className={`bg-slate-900/95 border rounded-2xl p-4.5 shadow-md flex flex-col justify-between space-y-3.5 transition-all hover:border-slate-700 ${
+                    hasMeasuresAlert
+                      ? 'border-amber-500/40 shadow-amber-950/20'
+                      : person.estadoLegal === 'Pedido de captura / paradero'
+                      ? 'border-rose-500/50 shadow-rose-950/30'
+                      : 'border-slate-800'
+                  }`}
+                >
+                  {/* Card Top */}
+                  <div className="space-y-3">
+                    {/* Row 1: Legal Status & Date */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${getEstadoBadgeStyle(
+                          person.estadoLegal
+                        )}`}
+                      >
+                        {person.estadoLegal === 'Sin impedimento' && (
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        )}
+                        {person.estadoLegal === 'Con medida cautelar' && (
+                          <AlertTriangle className="w-3 h-3 text-amber-400" />
+                        )}
+                        {person.estadoLegal === 'Pedido de captura / paradero' && (
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                          </span>
+                        )}
+                        <span>{person.estadoLegal}</span>
+                      </span>
+
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+                        <Clock className="w-3 h-3 text-slate-500" />
+                        <span>{dateFormatted}</span>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Citizen Name, Alias & DNI */}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-extrabold text-white text-base tracking-tight">
+                          {person.apellidoNombre}
+                        </h4>
+                        {person.alias && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 font-semibold border border-slate-700">
+                            "{person.alias}"
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-slate-300 font-mono mt-1">
+                        <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-blue-400 font-bold">
+                          DNI {person.dni || 'S/D'}
+                        </span>
+                        <span>•</span>
+                        <span className="text-slate-400">
+                          {person.nacionalidad || 'Argentina'}
+                          {person.edad ? ` (${person.edad} años)` : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Measures Alert Banner if applicable */}
+                    {hasMeasuresAlert && (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="leading-snug">
+                          <span className="font-bold block">
+                            {matchingMeasures.length} MEDIDA(S) JUDICIAL(ES) VIGENTE(S)
+                          </span>
+                          <span className="text-[11px] text-amber-400/90 line-clamp-1">
+                            {matchingMeasures.map((m) => `${m.tipoMedida} (Oficio: ${m.nroOficio})`).join(', ')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Information Grid */}
+                    <div className="space-y-1.5 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                        <div className="text-slate-300">
+                          <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                            Lugar del Control
+                          </span>
+                          <span className="text-[11px] leading-tight block">{person.lugar}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2 pt-1.5 border-t border-slate-800/60">
+                        <Shield className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                        <div className="text-slate-300">
+                          <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                            Motivo
+                          </span>
+                          <span className="text-[11px] leading-tight block">{person.motivo}</span>
+                        </div>
+                      </div>
+
+                      {person.vehiculo && (
+                        <div className="flex items-start gap-2 pt-1.5 border-t border-slate-800/60">
+                          <Car className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <div className="text-slate-300">
+                            <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                              Vehículo
+                            </span>
+                            <span className="text-[11px] font-mono font-medium text-emerald-300 block">
+                              {person.vehiculo}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-2 pt-1.5 border-t border-slate-800/60">
+                        <Building className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                        <div className="text-slate-300">
+                          <span className="text-slate-500 text-[10px] uppercase font-bold block">
+                            Dotación / Dependencia
+                          </span>
+                          <span className="text-[11px] text-slate-400 block">
+                            {person.interviniente} • {person.dependencia}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Bottom Actions */}
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => onOpenWhatsApp(person, matchingMeasures)}
+                      className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/40 transition-colors cursor-pointer"
+                      title="Compartir informe oficial de la persona identificada por WhatsApp"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setSelectedPersonForDetail(person)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                        title="Ver ficha completa"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+
+                      {userPermissions.canEdit && (
+                        <button
+                          onClick={() => onOpenEdit(person)}
+                          className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-colors cursor-pointer"
+                          title="Editar datos de la persona"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {userPermissions.canDelete && (
+                        <button
+                          onClick={() => onDelete(person)}
+                          className="p-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+                          title="Eliminar registro"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Table View */
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <th className="py-3 px-4">Fecha / Hora</th>
@@ -475,6 +721,7 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
             </table>
           </div>
         </div>
+        )
       ) : (
         /* Empty State */
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-lg mx-auto space-y-4">

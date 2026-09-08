@@ -11,13 +11,26 @@ export const DEFAULT_DRIVE_FOLDER_NAME = "Medidas y Oficios Judiciales (Drive Of
 
 export const INITIAL_USERS: UserProfile[] = [
   {
+    id: 'usr-1788786602829',
+    username: '30557',
+    password: 'NAVONI30557',
+    name: 'Sargento Navoni Leonel',
+    email: 'leonel.navoni@gmail.com',
+    role: 'superadmin',
+    badgeNumber: '30557',
+    department: 'Comisaría del Menor y V. Familiar',
+    status: 'active',
+    createdAt: '2026-09-07T13:10:02.829Z',
+    lastLogin: '2026-09-07T13:10:02.829Z',
+  },
+  {
     id: 'usr-1',
     username: 'admin',
     password: 'almorial1',
     name: 'Leonel Navoni',
     email: 'leonel.navoni@gmail.com',
     role: 'superadmin',
-    badgeNumber: 'LP-10492',
+    badgeNumber: '30557',
     department: 'Comisaría del Menor y V. Familiar',
     status: 'active',
     createdAt: '2026-01-10T08:00:00Z',
@@ -188,6 +201,78 @@ export function getInitialFiles(): DriveFile[] {
 }
 
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [
+  {
+    id: 'log-query-1',
+    userId: 'usr-3',
+    userName: 'Roberto Gómez',
+    userRole: 'editor',
+    action: 'SEARCH',
+    details: 'Consulta de Persona / DNI: "34892110" - Verificación de medidas cautelares e impedimentos',
+    timestamp: '2026-09-08T14:35:10Z',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'log-query-2',
+    userId: 'usr-2',
+    userName: 'Mariana Benítez',
+    userRole: 'admin',
+    action: 'SEARCH',
+    details: 'Consulta de Medida Judicial: "Prohibición de Acercamiento" - Expte: 8943/2026',
+    timestamp: '2026-09-08T13:20:44Z',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'log-query-3',
+    userId: 'usr-4',
+    userName: 'Valeria Soria',
+    userRole: 'viewer',
+    action: 'VIEW',
+    targetFileName: 'Oficio_Judicial_4512_Medida_Proteccion.pdf',
+    details: 'Visualización de Oficio Judicial N° 4512/26 - Juzgado de Familia N° 2',
+    timestamp: '2026-09-08T11:45:18Z',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'log-query-4',
+    userId: 'usr-3',
+    userName: 'Roberto Gómez',
+    userRole: 'editor',
+    action: 'SEARCH',
+    details: 'Consulta de Persona / DNI: "28910455" - Ciudadano: "BENÍTEZ, Mauro"',
+    timestamp: '2026-09-08T10:12:05Z',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'log-query-5',
+    userId: 'usr-1',
+    userName: 'Leonel Navoni',
+    userRole: 'superadmin',
+    action: 'SEARCH',
+    details: 'Búsqueda general de medidas judiciales: Carátula "Gómez c/ Ramírez s/ Violencia Familiar"',
+    timestamp: '2026-09-07T18:50:30Z',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'log-query-6',
+    userId: 'usr-4',
+    userName: 'Valeria Soria',
+    userRole: 'viewer',
+    action: 'SEARCH',
+    details: 'Consulta de Persona Identificada: "RODRÍGUEZ, Lucas" - Verificación en operativo de guardia',
+    timestamp: '2026-09-07T16:22:15Z',
+    status: 'SUCCESS'
+  },
+  {
+    id: 'log-query-7',
+    userId: 'usr-2',
+    userName: 'Mariana Benítez',
+    userRole: 'admin',
+    action: 'VIEW',
+    targetFileName: 'Oficio_7821_Exclusion_Hogar.pdf',
+    details: 'Apertura y consulta de Oficio N° 7821 - Exclusión del Hogar',
+    timestamp: '2026-09-07T15:10:00Z',
+    status: 'SUCCESS'
+  },
   {
     id: 'log-1',
     userId: 'usr-1',

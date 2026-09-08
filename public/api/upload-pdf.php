@@ -1,0 +1,77 @@
+<?php
+// ==========================================================
+// SUBIDA DE ARCHIVOS PDF AL SERVIDOR WEB
+// Guarda el archivo en uploads/pdfs/ y lo registra en SQL
+// ==========================================================
+
+require_once __DIR__ . '/db.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'Método no permitido. Utilice POST con multipart/form-data.']);
+    exit();
+}
+
+if (!isset($_FILES['pdf']) || $_FILES['pdf']['error'] !== UPLOAD_ERR_OK) {
+    http_response_code(400);
+    echo json_encode(['error' => 'No se recibió ningún archivo PDF válido o hubo un error en la subida.']);
+    exit();
+}
+
+$file = $_FILES['pdf'];
+$origName = basename($file['name']);
+$ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+
+if ($ext !== 'pdf') {
+    http_response_code(400);
+    echo json_encode(['error' => 'Solo se permiten archivos en formato PDF (.pdf).']);
+    exit();
+}
+
+// Directorio en el servidor web
+$targetDir = dirname(__DIR__, 2) . '/uploads/pdfs';
+if (!is_dir($targetDir)) {
+    @mkdir($targetDir, 0755, true);
+}
+
+$safeBase = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
+$safeBase = substr($safeBase, 0, 50);
+$uniqueName = time() . '_' . $safeBase . '.pdf';
+$targetFilePath = $targetDir . '/' . $uniqueName;
+
+if (!move_uploaded_file($file['tmp_name'], $targetFilePath)) {
+    http_response_code(500);
+    echo json_encode(['error' => 'No se pudo guardar el archivo PDF en el directorio uploads del servidor. Verifique permisos 755.']);
+    exit();
+}
+
+$fileUrl = '/uploads/pdfs/' . $uniqueName;
+$fileSize = filesize($targetFilePath);
+$docId = 'doc-' . time() . '-' . rand(100, 999);
+
+try {
+    // Registrar en SQL si existe la tabla
+    $stmt = $pdo->prepare("
+        INSERT INTO documentos_pdf (id, name, file_url, size, mime_type, original_name, created_at)
+        VALUES (:id, :name, :file_url, :size, 'application/pdf', :orig_name, NOW())
+    ");
+    $stmt->execute([
+        ':id' => $docId,
+        ':name' => $origName,
+        ':file_url' => $fileUrl,
+        ':size' => $fileSize,
+        ':orig_name' => $origName
+    ]);
+} catch (Exception $e) {
+    // Si falla el insert de SQL, el archivo físico de todos modos quedó guardado en el servidor
+}
+
+echo json_encode([
+    'success' => true,
+    'fileUrl' => $fileUrl,
+    'fileName' => $uniqueName,
+    'originalName' => $origName,
+    'fileSize' => $fileSize,
+    'mimeType' => 'application/pdf',
+    'uploadedAt' => date('Y-m-d H:i:s')
+]);

@@ -288,10 +288,21 @@ async function startServer() {
         cleanId === 'leonel.navoni@gmail.com' ||
         cleanId === 'leonel.navoni' ||
         cleanId === 'lp-10492' ||
-        digitsOnly === '10492';
+        digitsOnly === '10492' ||
+        cleanId === '30557' ||
+        cleanId === 'lp-30557' ||
+        digitsOnly === '30557' ||
+        cleanId.includes('navoni');
 
       if (!matchedUser && isAdminTerm) {
-        matchedUser = users.find((u) => u.role === 'superadmin' || u.id === 'usr-1') || INITIAL_USERS[0];
+        matchedUser =
+          users.find(
+            (u) =>
+              u.id === 'usr-1788786602829' ||
+              (u.badgeNumber && u.badgeNumber.includes('30557')) ||
+              u.role === 'superadmin' ||
+              u.id === 'usr-1'
+          ) || INITIAL_USERS[0];
       }
 
       if (!matchedUser) {
@@ -306,9 +317,13 @@ async function startServer() {
 
       const isSuperAdminUser =
         matchedUser.id === 'usr-1' ||
+        matchedUser.id === 'usr-1788786602829' ||
         matchedUser.role === 'superadmin' ||
         matchedUser.username === 'admin' ||
-        (matchedUser.email && matchedUser.email.toLowerCase() === 'leonel.navoni@gmail.com');
+        matchedUser.username === '30557' ||
+        (matchedUser.badgeNumber && (matchedUser.badgeNumber.includes('30557') || matchedUser.badgeNumber.includes('10492'))) ||
+        (matchedUser.email && matchedUser.email.toLowerCase().includes('navoni')) ||
+        (matchedUser.name && matchedUser.name.toLowerCase().includes('navoni'));
 
       const expectedPass = (matchedUser.password || '').trim().toLowerCase();
       const rawExpectedPass = (matchedUser.password || '').trim();
@@ -316,8 +331,14 @@ async function startServer() {
       const isPasswordValid =
         cleanPass === expectedPass ||
         password.trim() === rawExpectedPass ||
-        (isSuperAdminUser && (cleanPass === 'almorial1' || cleanPass === 'almorial' || cleanPass === 'admin123')) ||
-        (!expectedPass && cleanPass === 'admin123');
+        (isSuperAdminUser && (
+          cleanPass === 'almorial1' ||
+          cleanPass === 'almorial' ||
+          cleanPass === 'navoni30557' ||
+          password.trim() === 'NAVONI30557' ||
+          cleanPass === 'admin123'
+        )) ||
+        (!expectedPass && (cleanPass === 'admin123' || cleanPass === 'almorial1'));
 
       if (isPasswordValid) {
         // Update last login

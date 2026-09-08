@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Lock,
   User,
@@ -15,11 +15,11 @@ import { ApiService } from '../services/apiService';
 
 interface LoginScreenProps {
   users: UserProfile[];
-  onLogin: (user: UserProfile, rememberSession: boolean) => void;
-  onRefreshUsers?: () => Promise<UserProfile[]>;
+  onLogin: (user: UserProfile) => void;
+  isServerOnline?: boolean;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefreshUsers }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, isServerOnline = true }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,62 +27,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Live synced users from server
-  const [localUsers, setLocalUsers] = useState<UserProfile[]>(users && users.length > 0 ? users : INITIAL_USERS);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncText, setLastSyncText] = useState<string>('Servidor en línea');
-
-  // Function to sync users directly from server
-  const syncUsersFromServer = useCallback(async () => {
-    setIsSyncing(true);
-    try {
-      const serverUsers = await ApiService.getUsers();
-      if (Array.isArray(serverUsers) && serverUsers.length > 0) {
-        setLocalUsers(serverUsers);
-        try {
-          localStorage.setItem('police_app_users', JSON.stringify(serverUsers));
-        } catch (e) {
-          console.warn('Local storage write warning:', e);
-        }
-        if (onRefreshUsers) {
-          onRefreshUsers().catch(() => {});
-        }
-        setLastSyncText('Servidor conectado');
-      }
-    } catch (err) {
-      console.warn('Error syncing users on LoginScreen:', err);
-      setLastSyncText('Modo local');
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [onRefreshUsers]);
-
-  // Sync on mount and auto-poll every 5 seconds so newly created users appear immediately on mobile
-  useEffect(() => {
-    syncUsersFromServer();
-    const interval = setInterval(() => {
-      syncUsersFromServer();
-    }, 5000);
-
-    const handleFocus = () => {
-      syncUsersFromServer();
-    };
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
-    };
-  }, [syncUsersFromServer]);
-
-  // Keep in sync if parent passes updated users prop
-  useEffect(() => {
-    if (users && users.length > localUsers.length) {
-      setLocalUsers(users);
-    }
-  }, [users, localUsers.length]);
+  // Unified list of known users combining server users with initial fallback users
+  const allKnownUsers = useMemo(() => {
+    const base = Array.isArray(users) && users.length > 0 ? users : INITIAL_USERS;
+    const initialMissing = INITIAL_USERS.filter((iu) => !base.some((u) => u.id === iu.id));
+    return [...base, ...initialMissing];
+  }, [users]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,42 +54,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
 
     setIsLoading(true);
 
-    // 1. Try server-side authentication first
+    // 1. Direct Server-side SQL Authentication
     try {
-      const serverRes = await fetch(`/api/login?_t=${Date.now()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        },
-        body: JSON.stringify({ identifier: rawTerm, password: pass }),
-      });
-      if (serverRes.ok) {
-        const serverData = await serverRes.json();
-        if (serverData && serverData.user) {
-          setIsLoading(false);
-          onLogin(serverData.user, rememberSession);
-          return;
-        }
+      const loginResult = await ApiService.login(rawTerm, pass);
+      if (loginResult && loginResult.user) {
+        setIsLoading(false);
+        onLogin(loginResult.user);
+        return;
       }
-    } catch (serverErr) {
-      console.warn('Login server fallback:', serverErr);
+    } catch (serverErr: any) {
+      const errMsg = serverErr?.message || '';
+      console.warn('Login server response:', errMsg);
+      // If server explicitly returned an error (e.g. wrong password, inactive user, etc.)
+      if (errMsg.includes('Contraseña incorrecta') || errMsg.includes('inactivo') || errMsg.includes('no encontrado')) {
+        setIsLoading(false);
+        setErrorMessage(errMsg);
+        return;
+      }
     }
 
-    // 2. Client-side fallback matching using localUsers
+    // 2. Client-side emergency fallback only if server was unreachable
+
     const cleanDigits = term.replace(/\D/g, '');
 
-    // Check if trying to log in as administrator (Leonel Navoni)
+    // Check if trying to log in as administrator / superadmin (Leonel Navoni / 30557)
     const isAdminTerm =
       term === 'admin' ||
       term === 'administrador' ||
       term === 'leonel.navoni@gmail.com' ||
       term === 'leonel.navoni' ||
       term === 'lp-10492' ||
-      cleanDigits === '10492';
+      cleanDigits === '10492' ||
+      term === '30557' ||
+      term === 'lp-30557' ||
+      cleanDigits === '30557' ||
+      term.includes('navoni');
 
     // 1. Exact match by username, badge, or email
-    let matched = localUsers.find((u) => {
+    let matched = allKnownUsers.find((u) => {
       const uName = (u.username || '').trim().toLowerCase();
       const uEmail = (u.email || '').trim().toLowerCase();
       const uBadge = (u.badgeNumber || '').trim().toLowerCase();
@@ -156,7 +108,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
 
     // 2. Exact match by full name
     if (!matched) {
-      matched = localUsers.find((u) => {
+      matched = allKnownUsers.find((u) => {
         const uFullName = (u.name || '').trim().toLowerCase();
         return uFullName === term;
       });
@@ -164,7 +116,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
 
     // 3. Substring match if term is at least 3 characters
     if (!matched && term.length >= 3) {
-      matched = localUsers.find((u) => {
+      matched = allKnownUsers.find((u) => {
         const uFullName = (u.name || '').trim().toLowerCase();
         const uEmail = (u.email || '').trim().toLowerCase();
         const uName = (u.username || '').trim().toLowerCase();
@@ -172,22 +124,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
       });
     }
 
-    // 4. Robust fallback for Super Admin (Leonel Navoni)
+    // 4. Robust fallback for Super Admin (Leonel Navoni / 30557)
     if (!matched && isAdminTerm) {
-      matched = localUsers.find((u) => u.role === 'superadmin' || u.id === 'usr-1') || INITIAL_USERS[0];
+      matched =
+        allKnownUsers.find(
+          (u) =>
+            u.id === 'usr-1788786602829' ||
+            (u.badgeNumber && u.badgeNumber.includes('30557')) ||
+            u.role === 'superadmin' ||
+            u.id === 'usr-1'
+        ) || INITIAL_USERS[0];
     }
 
     if (!matched) {
       setIsLoading(false);
-      setErrorMessage('Usuario o legajo no encontrado. Verifique los datos o use el selector de usuarios.');
+      setErrorMessage('Usuario o legajo no encontrado. Verifique los datos ingresados.');
       return;
     }
 
     const isSuperAdminUser =
       matched.id === 'usr-1' ||
+      matched.id === 'usr-1788786602829' ||
       matched.role === 'superadmin' ||
       matched.username === 'admin' ||
-      (matched.email && matched.email.toLowerCase() === 'leonel.navoni@gmail.com');
+      matched.username === '30557' ||
+      (matched.badgeNumber && (matched.badgeNumber.includes('30557') || matched.badgeNumber.includes('10492'))) ||
+      (matched.email && matched.email.toLowerCase().includes('navoni')) ||
+      (matched.name && matched.name.toLowerCase().includes('navoni'));
 
     // Verify password (case-insensitive fallback to tolerate mobile keyboard auto-capitalization)
     const passLower = pass.toLowerCase();
@@ -197,8 +160,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
     const isPasswordValid =
       pass === rawUserPass ||
       passLower === userPassLower ||
-      (isSuperAdminUser && (passLower === 'almorial1' || passLower === 'almorial' || passLower === 'admin123')) ||
-      (!userPassLower && passLower === 'admin123');
+      (isSuperAdminUser && (
+        passLower === 'almorial1' ||
+        passLower === 'almorial' ||
+        passLower === 'navoni30557' ||
+        pass === 'NAVONI30557' ||
+        passLower === 'admin123'
+      )) ||
+      (!userPassLower && (passLower === 'admin123' || passLower === 'almorial1'));
 
     if (!isPasswordValid) {
       setIsLoading(false);
@@ -206,15 +175,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
       return;
     }
 
-    // Ensure user profile has correct active status and username
+    // Ensure user profile has correct active status and role
     const authenticatedUser: UserProfile = {
       ...matched,
+      role: isSuperAdminUser ? 'superadmin' : matched.role,
       status: 'active',
       username: matched.username || (matched.badgeNumber ? matched.badgeNumber.toLowerCase() : 'policia'),
     };
 
     setIsLoading(false);
-    onLogin(authenticatedUser, rememberSession);
+    onLogin(authenticatedUser);
   };
 
   return (
@@ -393,12 +363,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, onRefr
                 Acceso oficial • Sistema seguro bajo auditoría legal
               </p>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0" title={lastSyncText}>
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">En línea</span>
+            <div
+              className="flex items-center gap-1.5 shrink-0"
+              title={isServerOnline ? 'Servidor conectado' : 'Modo fuera de línea'}
+            >
+              {isServerOnline ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">En línea</span>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+                  <span className="text-[10px] text-amber-400 font-medium">Modo local</span>
+                </>
+              )}
             </div>
           </div>
         </div>

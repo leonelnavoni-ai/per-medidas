@@ -1,39 +1,32 @@
+# Apache & LiteSpeed Configuration for PER-Medidas
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # Permitir acceso directo a archivos PDF subidos y assets
-  RewriteRule ^uploads/(.*)$ uploads/$1 [L]
+  # Allow direct access to existing files and directories (including /api/ and uploads)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
 
-  # Enrutar solicitudes API al backend PHP en cPanel
-  RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+  # Specific API Endpoints
+  RewriteRule ^api/login/?$ api/login.php [L,QSA]
+  RewriteRule ^api/users/?(.*)$ api/users.php [L,QSA]
+  RewriteRule ^api/measures/?(.*)$ api/measures.php [L,QSA]
+  RewriteRule ^api/identifications/?(.*)$ api/identifications.php [L,QSA]
+  RewriteRule ^api/upload-pdf/?$ api/upload-pdf.php [L,QSA]
+  RewriteRule ^api/documents/?(.*)$ api/documents.php [L,QSA]
 
-  # No reescribir archivos ni carpetas físicas existentes
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
+  # Generic API fallback if .php file exists
+  RewriteCond %{REQUEST_FILENAME}\.php -f
+  RewriteRule ^api/(.*)$ api/$1.php [L,QSA]
 
-  # Redirigir todas las demás solicitudes a index.html (Soporte SPA)
+  # All other non-file requests route to index.html for React SPA
   RewriteRule ^ index.html [L]
 </IfModule>
 
-# Tipos MIME para PWA y fuentes
-<IfModule mod_mime.c>
-  AddType application/manifest+json .webmanifest
-  AddType application/javascript .js .mjs
-  AddType text/css .css
-  AddType image/svg+xml .svg
-</IfModule>
-
-# Seguridad y compresión GZIP
-<IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json image/svg+xml
-</IfModule>
-
-# Evitar que index.html y sw.js se congelen en la memoria de los celulares
+# Security & CORS
 <IfModule mod_headers.c>
-  <FilesMatch "(index\.html|sw\.js)$">
-    Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-  </FilesMatch>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
