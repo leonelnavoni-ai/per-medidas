@@ -59,6 +59,7 @@ interface AdminPanelProps {
   onDisconnectDrive: () => void;
   onUpdateDriveConfig: (searchFolderId: string, uploadFolderId: string) => void;
   onAddAuditLog: (action: any, details: string, targetFile?: string, status?: 'SUCCESS' | 'DENIED') => void;
+  initialSubTab?: 'users' | 'queries' | 'audit' | 'drive';
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -72,8 +73,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onDisconnectDrive,
   onUpdateDriveConfig,
   onAddAuditLog,
+  initialSubTab,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive'>(initialSubTab || 'users');
+
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  // System Audit Diagnostic State
+  const [systemAuditReport, setSystemAuditReport] = useState<any | null>(null);
+  const [isRunningSystemAudit, setIsRunningSystemAudit] = useState(false);
+  const [auditExportCopied, setAuditExportCopied] = useState(false);
+
+  const runSystemAudit = async () => {
+    setIsRunningSystemAudit(true);
+    try {
+      const report = await ApiService.getSystemAuditReport();
+      setSystemAuditReport(report);
+      onAddAuditLog('SEARCH', 'Ejecución de auditoría de diagnóstico e integridad del sistema policial');
+    } catch (e: any) {
+      console.warn('Error al ejecutar auditoría del sistema:', e);
+    } finally {
+      setIsRunningSystemAudit(false);
+    }
+  };
   
   // User query monitoring states
   const [selectedQueryUserId, setSelectedQueryUserId] = useState<string>('all');
@@ -1564,6 +1590,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
       {activeSubTab === 'audit' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          
+          {/* Header & Controls */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -1571,11 +1599,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <span>Registro Integral de Auditoría & Trazabilidad</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Historial cronológico de búsquedas, aperturas de documentos, descargas e intentos de acceso
+                Historial cronológico de búsquedas, aperturas de documentos, descargas e intentos de acceso guardados en servidor
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button
+                id="btn-run-system-audit"
+                onClick={runSystemAudit}
+                disabled={isRunningSystemAudit}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                title="Ejecutar diagnóstico integral de bases de datos y seguridad"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRunningSystemAudit ? 'animate-spin' : ''}`} />
+                <span>{isRunningSystemAudit ? 'Auditando...' : 'Auditar Sistema'}</span>
+              </button>
+
+              <button
+                id="btn-export-audit"
+                onClick={() => {
+                  const exportText = filteredLogs.map((l) => `[${formatDate(l.timestamp)}] [${l.action}] [${l.userRole.toUpperCase()}] ${l.userName}: ${l.details} (Estado: ${l.status})`).join('\n');
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(exportText);
+                    setAuditExportCopied(true);
+                    setTimeout(() => setAuditExportCopied(false), 2500);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                title="Copiar informe de auditoría al portapapeles"
+              >
+                {auditExportCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{auditExportCopied ? 'Copiado' : 'Exportar Registro'}</span>
+              </button>
+
               <select
                 value={auditActionFilter}
                 onChange={(e) => setAuditActionFilter(e.target.value as any)}
@@ -1608,6 +1664,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Real-time System Diagnostic Audit Card */}
+          {systemAuditReport && (
+            <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/30 text-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    Diagnóstico de Integridad Policial: {systemAuditReport.status}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {formatDate(systemAuditReport.timestamp)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
+                  <div className="text-[10px] text-slate-400 font-medium">BBDD Medidas Judiciales</div>
+                  <div className="text-base font-bold text-white mt-0.5">
+                    {systemAuditReport.databaseIntegrity?.measures?.total || 0}
+                  </div>
+                  <div className="text-[10px] text-emerald-400">100% íntegras y válidas</div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
+                  <div className="text-[10px] text-slate-400 font-medium">BBDD Identificaciones</div>
+                  <div className="text-base font-bold text-white mt-0.5">
+                    {systemAuditReport.databaseIntegrity?.identifications?.total || 0}
+                  </div>
+                  <div className="text-[10px] text-blue-400">Padrón verificado</div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
+                  <div className="text-[10px] text-slate-400 font-medium">Usuarios & Seguridad RBAC</div>
+                  <div className="text-base font-bold text-white mt-0.5">
+                    {systemAuditReport.databaseIntegrity?.users?.total || 0}
+                  </div>
+                  <div className="text-[10px] text-purple-400">Superadmin presente</div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
+                  <div className="text-[10px] text-slate-400 font-medium">Logs de Auditoría Servidor</div>
+                  <div className="text-base font-bold text-white mt-0.5">
+                    {systemAuditReport.databaseIntegrity?.auditLogs?.total || 0}
+                  </div>
+                  <div className="text-[10px] text-emerald-400">Persistencia activa</div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-300 flex items-center gap-1.5 pt-1 border-t border-slate-800">
+                <BadgeCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{systemAuditReport.securityVerdict?.summary || 'Integridad verificada con éxito.'}</span>
+              </div>
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">

@@ -1,4 +1,4 @@
-import { UserProfile, JudicialMeasure, IdentifiedPerson, DriveFile } from '../types';
+import { UserProfile, JudicialMeasure, IdentifiedPerson, DriveFile, AuditLog } from '../types';
 
 export interface UploadResponse {
   success: boolean;
@@ -251,6 +251,42 @@ export class ApiService {
     }
   }
 
+  static async saveSingleIdentification(person: IdentifiedPerson): Promise<IdentifiedPerson> {
+    try {
+      const res = await fetchWithPhpFallback(`/api/identifications/save?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(person),
+      });
+      if (res.ok) {
+        return await safeJson(res);
+      }
+    } catch (e) {
+      console.warn('Fallback al guardar identificación individual:', e);
+    }
+
+    // Fallback: /api/identifications
+    const fallbackRes = await fetchWithPhpFallback(`/api/identifications?_t=${Date.now()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(person),
+    });
+    if (!fallbackRes.ok) {
+      throw new Error('Error al guardar identificación en el servidor');
+    }
+    return await safeJson(fallbackRes);
+  }
+
+  static async deleteIdentification(personId: string): Promise<boolean> {
+    const res = await fetchWithPhpFallback(`/api/identifications/${encodeURIComponent(personId)}?_t=${Date.now()}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      throw new Error('Error al eliminar identificación en el servidor');
+    }
+    return true;
+  }
+
   // ---- DOCUMENTS / REPOSITORY FILES ----
   static async getDocuments(): Promise<DriveFile[]> {
     try {
@@ -285,5 +321,72 @@ export class ApiService {
       console.warn('Fallo guardando documentos en backend:', e);
       return documents;
     }
+  }
+
+  // ---- AUDIT & TRACEABILITY LOGS ----
+  static async getAuditLogs(): Promise<AuditLog[]> {
+    try {
+      const res = await fetchWithPhpFallback(`/api/audit?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
+      if (!res.ok) throw new Error('No se pudo obtener logs de auditoría del servidor');
+      const data = await safeJson(res);
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('Fallo al obtener logs de auditoría del servidor:', e);
+      throw e;
+    }
+  }
+
+  static async saveAuditLogs(logs: AuditLog[]): Promise<AuditLog[]> {
+    try {
+      const res = await fetchWithPhpFallback('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logs),
+      });
+      if (!res.ok) {
+        throw new Error('Error al guardar logs de auditoría en el servidor');
+      }
+      return await safeJson(res);
+    } catch (e) {
+      console.warn('Fallo guardando logs de auditoría en backend:', e);
+      return logs;
+    }
+  }
+
+  static async recordAuditLog(log: AuditLog): Promise<AuditLog> {
+    try {
+      const res = await fetchWithPhpFallback('/api/audit/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log),
+      });
+      if (!res.ok) {
+        throw new Error('Error al registrar evento de auditoría en el servidor');
+      }
+      return await safeJson(res);
+    } catch (e) {
+      console.warn('Fallo registrando evento individual de auditoría en backend:', e);
+      return log;
+    }
+  }
+
+  static async getSystemAuditReport(): Promise<any> {
+    const res = await fetchWithPhpFallback(`/api/audit/system-report?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+    if (!res.ok) {
+      throw new Error('Error al generar reporte de auditoría del sistema');
+    }
+    return await safeJson(res);
   }
 }

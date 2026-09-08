@@ -10,13 +10,14 @@ import {
   LogOut,
   UserCheck,
   RefreshCw,
+  FileCheck,
 } from 'lucide-react';
 import { UserProfile, DriveConnectionState, PermissionSet } from '../types';
 import { PoliceLogo } from './PoliceLogo';
 
 interface HeaderProps {
-  currentTab: 'measures' | 'identifications' | 'files' | 'admin';
-  setCurrentTab: (tab: 'measures' | 'identifications' | 'files' | 'admin') => void;
+  currentTab: 'measures' | 'identifications' | 'files' | 'admin' | 'audit';
+  setCurrentTab: (tab: 'measures' | 'identifications' | 'files' | 'admin' | 'audit') => void;
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onSwitchUser: (user: UserProfile) => void;
@@ -169,6 +170,23 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Users className="w-4 h-4" />
                 <span>Panel Admin</span>
+              </button>
+            )}
+
+            {/* Auditoría & Trazabilidad */}
+            {(userPermissions.canViewAuditLogs || userPermissions.canManageUsers || currentUser.role === 'superadmin' || currentUser.role === 'admin') && (
+              <button
+                id="nav-tab-audit"
+                onClick={() => setCurrentTab('audit')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                  currentTab === 'audit'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+                title="Registro de Auditoría y Trazabilidad Policial"
+              >
+                <FileCheck className="w-4 h-4 text-emerald-400" />
+                <span>Auditoría</span>
               </button>
             )}
           </div>
@@ -442,6 +460,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Users className="w-3.5 h-3.5" />
               <span>Admin</span>
+            </button>
+          )}
+          {(userPermissions.canViewAuditLogs || userPermissions.canManageUsers || currentUser.role === 'superadmin' || currentUser.role === 'admin') && (
+            <button
+              id="mobile-nav-tab-audit"
+              onClick={() => setCurrentTab('audit')}
+              className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap ${
+                currentTab === 'audit' ? 'bg-blue-600 text-white' : 'text-slate-400'
+              }`}
+            >
+              <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Auditoría</span>
             </button>
           )}
           {onLogout && (

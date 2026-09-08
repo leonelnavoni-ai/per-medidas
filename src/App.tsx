@@ -60,7 +60,7 @@ import { ApiService } from './services/apiService';
 
 export default function App() {
   // Navigation
-  const [currentTab, setCurrentTab] = useState<'measures' | 'identifications' | 'files' | 'admin'>('measures');
+  const [currentTab, setCurrentTab] = useState<'measures' | 'identifications' | 'files' | 'admin' | 'audit'>('measures');
 
   // Default Judicial Measures State (Stored on Web Server Database)
   const [measures, setMeasures] = useState<JudicialMeasure[]>(DEFAULT_JUDICIAL_MEASURES);
@@ -119,13 +119,16 @@ export default function App() {
 
   // Sync state with server
   const isSyncingRef = useRef(false);
+  const lastIdentEditTimeRef = useRef<number>(0);
+  const lastUsersEditTimeRef = useRef<number>(0);
+
   const syncWithServer = useCallback(async (showNotice = false) => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
     setIsServerSyncing(true);
     try {
       // Parallel requests for fast response on mobile data networks
-      const [serverUsers, serverMeasures, serverIdents, serverDocs] = await Promise.all([
+      const [serverUsers, serverMeasures, serverIdents, serverDocs, serverAudit] = await Promise.all([
         ApiService.getUsers().catch((e) => {
           console.warn('Sync users notice:', e);
           return null;
@@ -142,12 +145,18 @@ export default function App() {
           console.warn('Sync documents notice:', e);
           return null;
         }),
+        ApiService.getAuditLogs().catch((e) => {
+          console.warn('Sync audit notice:', e);
+          return null;
+        }),
       ]);
 
       let hasLiveResponse = false;
 
       if (Array.isArray(serverUsers) && serverUsers.length > 0) {
-        setUsers(serverUsers);
+        if (Date.now() - lastUsersEditTimeRef.current > 7000) {
+          setUsers(serverUsers);
+        }
         hasLiveResponse = true;
       }
       if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
@@ -155,7 +164,9 @@ export default function App() {
         hasLiveResponse = true;
       }
       if (Array.isArray(serverIdents) && serverIdents.length > 0) {
-        setIdentifications(serverIdents);
+        if (Date.now() - lastIdentEditTimeRef.current > 7000) {
+          setIdentifications(serverIdents);
+        }
         hasLiveResponse = true;
       }
       if (Array.isArray(serverDocs) && serverDocs.length > 0) {
@@ -165,6 +176,10 @@ export default function App() {
           const filteredDrive = driveFiles.filter((df) => !serverDocIds.has(df.id));
           return [...serverDocs, ...filteredDrive];
         });
+        hasLiveResponse = true;
+      }
+      if (Array.isArray(serverAudit) && serverAudit.length > 0) {
+        setAuditLogs(serverAudit);
         hasLiveResponse = true;
       }
 
@@ -224,6 +239,7 @@ export default function App() {
 
   // Safe user update function that pushes changes to web server database explicitly
   const updateUsersState = useCallback((updater: React.SetStateAction<UserProfile[]>) => {
+    lastUsersEditTimeRef.current = Date.now();
     setUsers((prevUsers) => {
       const nextUsers = typeof updater === 'function' ? updater(prevUsers) : updater;
       // Send directly to web server database
@@ -311,6 +327,10 @@ export default function App() {
       status,
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+    // Persist to server in real time
+    ApiService.recordAuditLog(newLog).catch((err) => {
+      console.warn('Aviso guardando log de auditoría en servidor:', err);
+    });
   };
 
   // Compute permissions for current active user
@@ -480,6 +500,14 @@ export default function App() {
   // Authentication Handlers
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
+    // Ensure newly authenticated user is integrated into users state
+    setUsers((prevUsers) => {
+      const exists = prevUsers.some((u) => u.id === user.id || u.username === user.username);
+      if (!exists) {
+        return [user, ...prevUsers];
+      }
+      return prevUsers.map((u) => (u.id === user.id ? { ...u, ...user } : u));
+    });
     setIsAuthenticated(true);
     try {
       sessionStorage.setItem('police_app_authenticated', 'true');
@@ -631,7 +659,10 @@ export default function App() {
     const canEdit =
       currentPermissions.canEdit ||
       (currentPermissions.canIdentifyPerson ?? true) ||
-      person.createdBy === currentUser.name;
+      person.createdBy === currentUser.name ||
+      currentUser.role === 'superadmin' ||
+      currentUser.role === 'admin' ||
+      currentUser.role === 'editor';
     if (!canEdit) {
       showToast('Acceso denegado: Tu rol de usuario no tiene permisos para modificar identificaciones.', 'error');
       return;
@@ -643,6 +674,7 @@ export default function App() {
 
   // Save or Update Person Identification
   const handleSavePerson = (person: IdentifiedPerson, sendWhatsApp: boolean) => {
+    lastIdentEditTimeRef.current = Date.now();
     const isEdit = personModalMode === 'edit';
     const exists = identifications.some((p) => p.id === person.id);
     let updated: IdentifiedPerson[];
@@ -653,7 +685,17 @@ export default function App() {
       updated = [person, ...identifications];
     }
 
-    updateIdentificationsState(updated);
+    setIdentifications(updated);
+
+    // Save individual record first for instant server-side persistence
+    ApiService.saveSingleIdentification(person)
+      .then(() => console.log('Persona identificada persistida en servidor:', person.apellidoNombre))
+      .catch((err) => console.warn('Aviso guardando identificación individual:', err));
+
+    // Also persist full list to guarantee synchronization
+    ApiService.saveIdentifications(updated).catch((err) =>
+      console.warn('Error al guardar identificaciones en el servidor:', err)
+    );
 
     addAuditLog(
       isEdit ? 'UPDATE_PERSON_IDENTIFICATION' : 'CREATE_PERSON_IDENTIFICATION',
@@ -688,8 +730,14 @@ export default function App() {
       return;
     }
     if (confirm(`¿Estás seguro de eliminar el registro de identificación de "${person.apellidoNombre}" (DNI: ${person.dni || 'S/D'})?`)) {
+      lastIdentEditTimeRef.current = Date.now();
       const updated = identifications.filter((p) => p.id !== person.id);
-      updateIdentificationsState(updated);
+      setIdentifications(updated);
+
+      ApiService.deleteIdentification(person.id).catch(() => {
+        ApiService.saveIdentifications(updated).catch(() => {});
+      });
+
       addAuditLog(
         'DELETE_PERSON_IDENTIFICATION',
         `Eliminación de identificación policial: ${person.apellidoNombre} (DNI ${person.dni || 'S/D'})`,
@@ -1203,8 +1251,8 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. ADMIN PANEL VIEW */}
-        {currentTab === 'admin' && (
+        {/* 3. ADMIN & AUDIT PANEL VIEW */}
+        {(currentTab === 'admin' || currentTab === 'audit') && (
           <AdminPanel
             users={users}
             setUsers={updateUsersState}
@@ -1223,6 +1271,7 @@ export default function App() {
               }))
             }
             onAddAuditLog={addAuditLog}
+            initialSubTab={currentTab === 'audit' ? 'audit' : 'users'}
           />
         )}
 

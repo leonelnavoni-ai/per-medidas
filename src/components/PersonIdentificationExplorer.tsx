@@ -515,11 +515,11 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
                         <Eye className="w-3.5 h-3.5" />
                       </button>
 
-                      {userPermissions.canEdit && (
+                      {(userPermissions.canEdit || (userPermissions.canIdentifyPerson ?? true) || person.createdBy === currentUser.name || currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.role === 'editor') && (
                         <button
                           onClick={() => onOpenEdit(person)}
                           className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-colors cursor-pointer"
-                          title="Editar datos de la persona"
+                          title="Editar / Modificar datos de la persona"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -934,7 +934,7 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
             </div>
 
             {/* Modal Footer */}
-            <div className="px-5 py-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+            <div className="px-5 py-3.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
               <button
                 type="button"
                 onClick={() => {
@@ -948,6 +948,22 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
               </button>
 
               <div className="flex items-center gap-2">
+                {(userPermissions.canEdit || (userPermissions.canIdentifyPerson ?? true) || selectedPersonForDetail.createdBy === currentUser.name || currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.role === 'editor') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = selectedPersonForDetail;
+                      setSelectedPersonForDetail(null);
+                      onOpenEdit(p);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Editar y guardar cambios en esta persona"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Modificar Ficha</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => window.print()}
