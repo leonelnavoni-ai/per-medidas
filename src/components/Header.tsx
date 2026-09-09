@@ -18,8 +18,8 @@ interface HeaderProps {
   currentTab: 'measures' | 'identifications' | 'files' | 'admin' | 'audit';
   setCurrentTab: (tab: 'measures' | 'identifications' | 'files' | 'admin' | 'audit') => void;
   currentUser: UserProfile;
-  allUsers: UserProfile[];
-  onSwitchUser: (user: UserProfile) => void;
+  allUsers?: UserProfile[];
+  onSwitchUser?: (user: UserProfile) => void;
   userPermissions: PermissionSet;
   driveState: DriveConnectionState;
   onConnectDrive: () => void;
@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentTab,
   setCurrentTab,
   currentUser,
-  allUsers,
+  allUsers = [],
   onSwitchUser,
   userPermissions,
   driveState,
@@ -65,7 +65,6 @@ export const Header: React.FC<HeaderProps> = ({
   serverOnline = true,
   onManualSync,
 }) => {
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showDriveMenu, setShowDriveMenu] = useState(false);
 
   const getRoleBadge = (role: string) => {
@@ -92,25 +91,25 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-lg backdrop-blur-md bg-opacity-95">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between min-h-[3.5rem] py-1.5 gap-3">
+    <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-lg backdrop-blur-md bg-opacity-95 w-full">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between min-h-[3.25rem] sm:min-h-[3.5rem] py-1.5 gap-2 sm:gap-3">
           
           {/* App Brand & Identity */}
           <div 
-            className="flex items-center space-x-2 sm:space-x-2.5 cursor-pointer min-w-0 shrink-0" 
+            className="flex items-center space-x-1.5 sm:space-x-2.5 cursor-pointer min-w-0 shrink" 
             onClick={() => setCurrentTab('measures')}
             title="Comisaría de Minoridad y Violencia Familiar - Policía de Entre Ríos"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center filter drop-shadow-md">
-              <PoliceLogo className="w-8 h-8 sm:w-9 sm:h-9" variant={logoVariant} />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center filter drop-shadow-md">
+              <PoliceLogo className="w-7 h-7 sm:w-9 sm:h-9" variant={logoVariant} />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-bold text-xs sm:text-sm tracking-tight text-white whitespace-nowrap">
-                  Comisaría de Minoridad y V. Familiar
+              <div className="flex items-center gap-1 sm:gap-2">
+                <span className="font-bold text-[11px] sm:text-sm tracking-tight text-white truncate max-w-[170px] sm:max-w-none">
+                  Comisaría Minoridad y V. Familiar
                 </span>
-                <span className="text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 whitespace-nowrap shrink-0">
+                <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 whitespace-nowrap shrink-0">
                   Policía ER
                 </span>
               </div>
@@ -280,106 +279,23 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* User Switcher / Role Simulation Dropdown */}
-            <div className="relative">
-              <button
-                id="header-user-switcher-btn"
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs transition-colors cursor-pointer"
-              >
-                <div className="w-7 h-7 rounded-lg bg-blue-700 flex items-center justify-center text-white font-bold text-xs shadow-inner">
-                  {currentUser.name.charAt(0)}
+            {/* Usuario Actual Autenticado (Sin opción de abrir o cambiar a otros usuarios) */}
+            <div 
+              id="header-current-user-badge"
+              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs shadow-sm"
+              title={`Usuario activo: ${currentUser.name} (${currentUser.username ? `@${currentUser.username}` : currentUser.email})`}
+            >
+              <div className="w-7 h-7 rounded-lg bg-blue-700 flex items-center justify-center text-white font-bold text-xs shadow-inner shrink-0">
+                {currentUser.name.charAt(0)}
+              </div>
+              <div className="text-left hidden sm:block">
+                <div className="text-xs font-semibold text-slate-100 truncate max-w-[120px]">
+                  {currentUser.name}
                 </div>
-                <div className="text-left hidden sm:block">
-                  <div className="text-xs font-medium text-slate-200 truncate max-w-[100px]">
-                    {currentUser.name}
-                  </div>
-                  <div className="text-[10px] text-slate-400 capitalize">
-                    {getRoleName(currentUser.role)}
-                  </div>
+                <div className="text-[10px] text-slate-400 capitalize">
+                  {getRoleName(currentUser.role)}
                 </div>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
-
-              {showUserMenu && (
-                <div 
-                  className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="px-3 py-2 border-b border-slate-800">
-                    <p className="text-[11px] font-semibold uppercase text-slate-400 tracking-wider">
-                      Simular Rol de Usuario (RBAC)
-                    </p>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Cambia de usuario para probar los permisos de visualización, descarga y gestión.
-                    </p>
-                  </div>
-
-                  <div className="py-1 max-h-60 overflow-y-auto">
-                    {allUsers.map((u) => {
-                      const isSelected = u.id === currentUser.id;
-                      return (
-                        <button
-                          key={u.id}
-                          onClick={() => {
-                            onSwitchUser(u);
-                            setShowUserMenu(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors ${
-                            isSelected
-                              ? 'bg-blue-600/20 text-blue-300 font-semibold'
-                              : 'text-slate-300 hover:bg-slate-800'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-md bg-slate-700 flex items-center justify-center text-[10px] font-bold text-white">
-                              {u.name.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="truncate max-w-[130px] font-medium">{u.name}</div>
-                              <div className="text-[10px] text-slate-400 truncate max-w-[130px]">{u.email}</div>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${getRoleBadge(u.role)}`}>
-                            {getRoleName(u.role)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {userPermissions.canManageUsers && (
-                    <div className="pt-2 mt-1 border-t border-slate-800 px-1">
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          setCurrentTab('admin');
-                        }}
-                        className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center justify-center gap-1.5 font-medium transition-colors"
-                      >
-                        <Users className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Abrir Panel de Permisos</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {onLogout && (
-                    <div className="pt-2 mt-1 border-t border-slate-800 px-1">
-                      <button
-                        id="btn-header-dropdown-logout"
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          onLogout();
-                        }}
-                        className="w-full py-1.5 px-3 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs flex items-center justify-center gap-1.5 font-semibold transition-colors cursor-pointer"
-                      >
-                        <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Cerrar Sesión</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Quick Logout Button in Header Bar */}
