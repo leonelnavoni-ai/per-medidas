@@ -114,6 +114,7 @@ export interface DriveFile {
   folderPath?: string;
   driveId?: string;
   measureData?: JudicialMeasure;
+  pdfBase64?: string;
 }
 
 export interface UserProfile {

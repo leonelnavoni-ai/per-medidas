@@ -88,7 +88,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-emerald-100/90 mt-0.5">
-                Comisaría del Menor y Violencia Familiar - PER Victoria
+                Comisaría de Minoridad y Violencia Familiar - PER Victoria
               </p>
             </div>
           </div>

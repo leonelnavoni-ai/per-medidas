@@ -13,7 +13,7 @@ export function buildMeasureWhatsAppMessage(
   const lines: string[] = [];
 
   lines.push('🚨 *POLICÍA DE ENTRE RÍOS*');
-  lines.push('🏛️ *Comisaría del Menor y Violencia Familiar - Victoria*');
+  lines.push('🏛️ *Comisaría de Minoridad y Violencia Familiar - Victoria*');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('📋 *NOTIFICACIÓN DE MEDIDA JUDICIAL*');
   lines.push('');
@@ -81,7 +81,7 @@ export function buildMeasureWhatsAppMessage(
 
   // Sender information (who is sending it)
   const badgeInfo = sender.badgeNumber ? ` (Legajo: ${sender.badgeNumber})` : '';
-  const depInfo = sender.department ? ` - ${sender.department}` : ' - Comisaría del Menor y V. Familiar';
+  const depInfo = sender.department ? ` - ${sender.department}` : ' - Comisaría de Minoridad y V. Familiar';
   lines.push(`👮‍♂️ *Enviado por:* ${sender.name}${badgeInfo}${depInfo}`);
 
   const now = new Date();
@@ -133,7 +133,7 @@ export function buildUserCredentialsWhatsAppMessage(
   const lines: string[] = [];
 
   lines.push('🚨 *POLICÍA DE ENTRE RÍOS*');
-  lines.push('🏛️ *Comisaría del Menor y Violencia Familiar - Victoria*');
+  lines.push('🏛️ *Comisaría de Minoridad y Violencia Familiar - Victoria*');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('🔐 *CREDENCIALES DE ACCESO AL SISTEMA*');
   lines.push('📋 _Sistema Integral de Gestión de Medidas Judiciales y Oficios_');
@@ -216,7 +216,7 @@ export function buildPersonIdentificationWhatsAppMessage(
   const lines: string[] = [];
 
   lines.push('🚨 *POLICÍA DE ENTRE RÍOS*');
-  lines.push('🏛️ *Jefatura Departamental Victoria - Comisaría del Menor y V. Familiar*');
+  lines.push('🏛️ *Jefatura Departamental Victoria - Comisaría de Minoridad y V. Familiar*');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('📋 *INFORME DE IDENTIFICACIÓN DE PERSONA*');
   lines.push('');

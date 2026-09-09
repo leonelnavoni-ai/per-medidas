@@ -70,7 +70,7 @@ export const PoliceLogo: React.FC<PoliceLogoProps> = ({
 
   const upperText =
     variant === 'adapted'
-      ? 'COMISARÍA DEL MENOR Y VIOLENCIA FAMILIAR'
+      ? 'COMISARÍA DE MINORIDAD Y VIOLENCIA FAMILIAR'
       : 'JEFATURA DE POLICÍA';
 
   const lowerText =
@@ -86,7 +86,7 @@ export const PoliceLogo: React.FC<PoliceLogoProps> = ({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Escudo Oficial Policía de Entre Ríos - Comisaría del Menor y Violencia Familiar"
+      aria-label="Escudo Oficial Policía de Entre Ríos - Comisaría de Minoridad y Violencia Familiar"
     >
       <defs>
         {/* Radiance gold gradient light facet */}
@@ -151,7 +151,7 @@ export const PoliceLogo: React.FC<PoliceLogoProps> = ({
         {/* Upper Arc Path (left to right over the top) */}
         <path
           id="upperArcPath"
-          d="M 68 250 A 182 182 0 0 1 432 250"
+          d={variant === 'adapted' ? "M 76 250 A 174 174 0 0 1 424 250" : "M 68 250 A 182 182 0 0 1 432 250"}
           fill="none"
         />
 
@@ -193,15 +193,15 @@ export const PoliceLogo: React.FC<PoliceLogoProps> = ({
       <circle cx="250" cy="250" r="152" fill="none" stroke="#FEF08A" strokeWidth="1" opacity="0.6" />
 
       {/* --- 4. CIRCULAR TEXT IN GOLD LETTERS --- */}
-      {/* Upper Text: COMISARÍA DEL MENOR Y VIOLENCIA FAMILIAR / JEFATURA DE POLICÍA */}
+      {/* Upper Text: COMISARÍA DE MINORIDAD Y VIOLENCIA FAMILIAR / JEFATURA DE POLICÍA */}
       <text
         fill="#FACC15"
         stroke="#78350F"
         strokeWidth="0.6"
-        fontSize={variant === 'adapted' ? '12.8' : '20'}
+        fontSize={variant === 'adapted' ? '11.2' : '20'}
         fontWeight="900"
         fontFamily="system-ui, -apple-system, sans-serif"
-        letterSpacing={variant === 'adapted' ? '1.8' : '4'}
+        letterSpacing={variant === 'adapted' ? '0.8' : '4'}
       >
         <textPath href="#upperArcPath" startOffset="50%" textAnchor="middle">
           {upperText}

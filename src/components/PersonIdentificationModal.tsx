@@ -98,7 +98,7 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
       setLugar('');
       const badge = currentUser.badgeNumber ? ` (Leg. ${currentUser.badgeNumber})` : '';
       setInterviniente(`${currentUser.name}${badge}`);
-      setDependencia(currentUser.department || 'Comisaría del Menor y Violencia Familiar');
+      setDependencia(currentUser.department || 'Comisaría de Minoridad y Violencia Familiar');
       setEstadoLegal('Sin impedimento');
       setObservaciones('');
       setVehiculo('');
@@ -150,7 +150,7 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
       motivo: finalMotivo,
       lugar: lugar.trim() || 'Jurisdicción Victoria, Entre Ríos',
       interviniente: interviniente.trim() || currentUser.name,
-      dependencia: dependencia.trim() || 'Comisaría del Menor y Violencia Familiar',
+      dependencia: dependencia.trim() || 'Comisaría de Minoridad y Violencia Familiar',
       estadoLegal,
       observaciones: observaciones.trim() || undefined,
       vehiculo: vehiculo.trim() || undefined,
@@ -463,7 +463,7 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
                   type="text"
                   value={dependencia}
                   onChange={(e) => setDependencia(e.target.value)}
-                  placeholder="Comisaría del Menor y Violencia Familiar"
+                  placeholder="Comisaría de Minoridad y Violencia Familiar"
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                 />
               </div>

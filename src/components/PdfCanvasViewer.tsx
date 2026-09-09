@@ -54,7 +54,23 @@ export const PdfCanvasViewer: React.FC<PdfCanvasViewerProps> = ({
         // Fetch arrayBuffer to guarantee zero cross-origin/sandbox blocking
         const response = await fetch(pdfUrl);
         if (!response.ok) throw new Error(`HTTP ${response.status}: No se pudo leer el archivo binario`);
+        
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+          throw new Error('El servidor devolvió una página HTML en lugar del documento PDF binario.');
+        }
+
         const arrayBuffer = await response.arrayBuffer();
+        if (arrayBuffer.byteLength < 10) {
+          throw new Error('El archivo recibido está vacío o incompleto.');
+        }
+
+        // Validate %PDF magic number
+        const headerBytes = new Uint8Array(arrayBuffer.slice(0, 4));
+        const isPdfMagic = headerBytes[0] === 0x25 && headerBytes[1] === 0x50 && headerBytes[2] === 0x44 && headerBytes[3] === 0x46;
+        if (!isPdfMagic) {
+          throw new Error('El formato del archivo no corresponde a un documento PDF estándar.');
+        }
 
         const loadingTask = pdfjsLib.getDocument({
           data: new Uint8Array(arrayBuffer),

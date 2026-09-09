@@ -13,6 +13,7 @@ import { CATEGORIES, DEFAULT_DRIVE_FOLDER_ID, DEFAULT_DRIVE_FOLDER_URL } from '.
 import { DriveService } from '../services/driveService';
 import { ApiService } from '../services/apiService';
 import { formatBytes } from '../utils/formatters';
+import { fileToBase64 } from '../utils/measureUtils';
 
 interface UploadPdfModalProps {
   isOpen: boolean;
@@ -89,6 +90,8 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
     if (!tags.includes(category)) tags.unshift(category);
 
     try {
+      const base64Data = await fileToBase64(selectedFile);
+
       // 1. Upload to the server so the physical PDF is permanently stored on the server
       let serverPdfUrl: string | undefined;
       try {
@@ -118,6 +121,7 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
           uploadedBy: currentUserName,
           serverPdfUrl,
           localBlobUrl: URL.createObjectURL(selectedFile),
+          pdfBase64: base64Data,
         };
         onAddFile(newDoc);
       } else {
@@ -137,6 +141,7 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
           serverPdfUrl,
           localBlobUrl: blobUrl,
           uploadedBy: currentUserName,
+          pdfBase64: base64Data,
         };
         onAddFile(newDoc);
       }

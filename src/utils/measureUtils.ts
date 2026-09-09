@@ -43,14 +43,12 @@ export function base64ToBlob(base64Data: string, contentType = 'application/pdf'
  * Converts a JudicialMeasure into a DriveFile compatible with the viewer and files index
  */
 export function measureToDriveFile(m: JudicialMeasure): DriveFile {
-  let blobUrl = m.serverPdfUrl || m.pdfBlobUrl;
+  let blobUrl: string | undefined;
   let fileSize = m.pdfFileSize || 102400;
 
-  // If measure has a server-stored PDF, use it
-  if (m.serverPdfUrl) {
-    blobUrl = m.serverPdfUrl;
-  } else if (m.hasCustomPdf && m.pdfBase64) {
-    // If measure has a custom uploaded PDF stored in base64, restore its Blob URL
+  // 1. If measure has a custom uploaded PDF stored in base64, restore its local Blob URL with priority #1
+  // This guarantees 100% offline access, eliminates network latency, and avoids server rewrite/CORS issues
+  if (m.hasCustomPdf && m.pdfBase64) {
     try {
       const customBlob = base64ToBlob(m.pdfBase64);
       blobUrl = URL.createObjectURL(customBlob);
@@ -60,7 +58,12 @@ export function measureToDriveFile(m: JudicialMeasure): DriveFile {
     }
   }
 
-  // Fallback to generated PDF template if no custom PDF or blob URL exists
+  // 2. If no base64, check for existing server-stored PDF URL or pre-existing blob URL
+  if (!blobUrl && (m.serverPdfUrl || m.pdfBlobUrl)) {
+    blobUrl = m.serverPdfUrl || m.pdfBlobUrl;
+  }
+
+  // 3. Fallback to generated PDF template if no custom PDF or blob URL exists
   if (!blobUrl) {
     const pdfBlob = generateJudicialMeasurePdfBlob(m);
     blobUrl = URL.createObjectURL(pdfBlob);
@@ -91,6 +94,7 @@ export function measureToDriveFile(m: JudicialMeasure): DriveFile {
     isHostedLocal: !m.driveFileId,
     serverPdfUrl: m.serverPdfUrl,
     localBlobUrl: blobUrl,
+    pdfBase64: m.pdfBase64,
     description: `Oficio Judicial N° ${m.nroOficio}. Beneficiario/a: ${m.victima}. Denunciado/a: ${m.victimario}. Vigente: ${m.fechaDesde} hasta ${m.fechaHasta || 'Duración de la causa'}. Organismo emisor: ${m.provenienteDe}.${m.driveFolder ? ` [Google Drive: ${m.driveFolder}]` : ''}`,
     uploadedBy: m.updatedBy || 'Poder Judicial / Registro Central',
     folderPath: m.driveFolder || 'Medidas Judiciales',

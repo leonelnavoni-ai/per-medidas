@@ -94,7 +94,7 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
-      const activeId = sessionStorage.getItem('police_app_active_user_id');
+      const activeId = sessionStorage.getItem('police_app_active_user_id') || localStorage.getItem('police_app_active_user_id');
       if (activeId) {
         const found = INITIAL_USERS.find((u: UserProfile) => u.id === activeId);
         if (found) return found;
@@ -103,9 +103,13 @@ export default function App() {
     return INITIAL_USERS[0];
   });
 
-  // Authentication State - Defaults strictly to false so entering the application requires login
+  // Authentication State - Defaults to stored session or persistent session if remember was marked
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
+      const isRemembered = localStorage.getItem('police_app_remember_user_data') === 'true';
+      if (isRemembered && localStorage.getItem('police_app_authenticated') === 'true') {
+        return true;
+      }
       const sessionAuth = sessionStorage.getItem('police_app_authenticated');
       if (sessionAuth === 'true') return true;
     } catch (e) {
@@ -498,7 +502,7 @@ export default function App() {
   };
 
   // Authentication Handlers
-  const handleLogin = (user: UserProfile) => {
+  const handleLogin = (user: UserProfile, remember: boolean = false) => {
     setCurrentUser(user);
     // Ensure newly authenticated user is integrated into users state
     setUsers((prevUsers) => {
@@ -512,6 +516,13 @@ export default function App() {
     try {
       sessionStorage.setItem('police_app_authenticated', 'true');
       sessionStorage.setItem('police_app_active_user_id', user.id);
+      if (remember) {
+        localStorage.setItem('police_app_authenticated', 'true');
+        localStorage.setItem('police_app_active_user_id', user.id);
+      } else {
+        localStorage.removeItem('police_app_authenticated');
+        localStorage.removeItem('police_app_active_user_id');
+      }
     } catch (e) {
       console.warn('Failed to save session state:', e);
     }
@@ -524,6 +535,8 @@ export default function App() {
     try {
       sessionStorage.removeItem('police_app_authenticated');
       sessionStorage.removeItem('police_app_active_user_id');
+      localStorage.removeItem('police_app_authenticated');
+      localStorage.removeItem('police_app_active_user_id');
     } catch (e) {
       console.warn('Failed to clear session state:', e);
     }
@@ -548,9 +561,31 @@ export default function App() {
       showToast(`Preparando descarga de ${file.name}...`, 'success');
       let blobUrl = file.localBlobUrl;
 
+      // Check if file has embedded base64 data
+      const base64Content = file.measureData?.pdfBase64 || file.pdfBase64;
+      if (base64Content) {
+        try {
+          const rawBlob = base64ToBlob(base64Content);
+          blobUrl = URL.createObjectURL(rawBlob);
+        } catch (e) {
+          console.warn('Error converting file base64 to blob:', e);
+        }
+      }
+
       if (!blobUrl && file.serverPdfUrl) {
-        blobUrl = file.serverPdfUrl;
-      } else if (!blobUrl && file.driveId && driveState.accessToken) {
+        try {
+          const res = await fetch(file.serverPdfUrl);
+          const ct = res.headers.get('content-type') || '';
+          if (res.ok && !ct.includes('text/html')) {
+            const rawBlob = await res.blob();
+            blobUrl = URL.createObjectURL(rawBlob);
+          }
+        } catch (e) {
+          console.warn('Could not fetch serverPdfUrl:', e);
+        }
+      }
+
+      if (!blobUrl && file.driveId && driveState.accessToken) {
         const blob = await DriveService.downloadPdfBlob(driveState.accessToken, file.driveId);
         blobUrl = URL.createObjectURL(blob);
       }
@@ -770,42 +805,42 @@ export default function App() {
     try {
       let blob: Blob;
       let downloadFileName: string;
+      const safeOficio = (measure.nroOficio || 'SN').replace(/[^a-zA-Z0-9]/g, '_');
 
-      if (measure.hasCustomPdf && measure.serverPdfUrl) {
+      // 1. If measure has embedded custom PDF base64, prioritize it for instant 100% genuine download
+      if (measure.hasCustomPdf && measure.pdfBase64) {
+        blob = base64ToBlob(measure.pdfBase64);
+        downloadFileName = measure.pdfFileName || `Oficio_Judicial_${safeOficio}.pdf`;
+      } else if (measure.hasCustomPdf && measure.serverPdfUrl) {
         try {
           const res = await fetch(measure.serverPdfUrl);
-          if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && !contentType.includes('text/html')) {
             blob = await res.blob();
-            downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
+            downloadFileName = measure.pdfFileName || `Oficio_Judicial_${safeOficio}.pdf`;
           } else {
-            throw new Error(`Error HTTP ${res.status}`);
+            throw new Error(`Servidor devolvió contenido no binario (${contentType})`);
           }
         } catch (fetchErr) {
-          console.warn('Fallback a base64 o generado:', fetchErr);
+          console.warn('Fallback a base64 o generado tras error de red:', fetchErr);
           if (measure.pdfBase64) {
             blob = base64ToBlob(measure.pdfBase64);
-            downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
+            downloadFileName = measure.pdfFileName || `Oficio_Judicial_${safeOficio}.pdf`;
           } else {
             blob = generateJudicialMeasurePdfBlob(measure);
-            const safeOficio = (measure.nroOficio || 'SN').replace(/[^a-zA-Z0-9]/g, '_');
             downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
           }
         }
-      } else if (measure.hasCustomPdf && measure.pdfBase64) {
-        blob = base64ToBlob(measure.pdfBase64);
-        downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
       } else if (measure.hasCustomPdf && measure.driveFileId && driveState.isConnected && driveState.accessToken) {
         try {
           blob = await DriveService.downloadPdfBlob(driveState.accessToken, measure.driveFileId);
-          downloadFileName = measure.pdfFileName || `Oficio_${measure.nroOficio}.pdf`;
+          downloadFileName = measure.pdfFileName || `Oficio_${safeOficio}.pdf`;
         } catch {
           blob = generateJudicialMeasurePdfBlob(measure);
-          const safeOficio = (measure.nroOficio || 'SN').replace(/[^a-zA-Z0-9]/g, '_');
           downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
         }
       } else {
         blob = generateJudicialMeasurePdfBlob(measure);
-        const safeOficio = (measure.nroOficio || 'SN').replace(/[^a-zA-Z0-9]/g, '_');
         downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
       }
 
@@ -1138,7 +1173,6 @@ export default function App() {
         onConnectDrive={handleConnectDrive}
         onDisconnectDrive={handleDisconnectDrive}
         onOpenUpload={() => setIsUploadOpen(true)}
-        onOpenCreateMeasure={handleOpenCreateMeasure}
         onInstallPwa={handleTriggerInstall}
         isInstallable={Boolean(deferredInstallPrompt)}
         isPwaInstalled={isPwaInstalled}

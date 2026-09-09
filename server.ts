@@ -175,6 +175,56 @@ async function startServer() {
     }
   });
 
+  // Resilient PDF Streaming Endpoint
+  app.get('/api/pdf', (req, res) => {
+    const rawFile = (req.query.file as string) || (req.query.name as string) || '';
+    const fileName = path.basename(decodeURIComponent(rawFile));
+    if (!fileName) {
+      res.status(400).json({ error: 'Se requiere el nombre del archivo PDF' });
+      return;
+    }
+
+    const filePath1 = path.join(PDF_UPLOADS_DIR, fileName);
+    const filePath2 = path.join(PUBLIC_UPLOADS_DIR, fileName);
+
+    if (fs.existsSync(filePath1)) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+      res.sendFile(filePath1);
+      return;
+    }
+    if (fs.existsSync(filePath2)) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+      res.sendFile(filePath2);
+      return;
+    }
+
+    // Search in measures data for embedded base64 PDF
+    try {
+      const measures = readJsonFile<any[]>(MEASURES_FILE, []);
+      const found = measures.find(
+        (m) =>
+          m.serverPdfUrl?.includes(fileName) ||
+          m.pdfFileName === fileName ||
+          m.id === fileName
+      );
+      if (found && found.pdfBase64) {
+        const base64Data = found.pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${found.pdfFileName || fileName}"`);
+        res.setHeader('Content-Length', buffer.length.toString());
+        res.send(buffer);
+        return;
+      }
+    } catch (e) {
+      console.warn('Error reading measures for PDF base64:', e);
+    }
+
+    res.status(404).json({ error: 'Documento PDF no encontrado', file: fileName });
+  });
+
   // 3. Users & Passwords API
   app.get('/api/users', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -715,6 +765,134 @@ async function startServer() {
       res.json(report);
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Error al generar informe de auditoría' });
+    }
+  });
+
+  // 10. Complete System Backup & Restore APIs
+  app.get('/api/backup/export', (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      const users = readJsonFile<UserProfile[]>(USERS_FILE, INITIAL_USERS);
+      const measures = readJsonFile<JudicialMeasure[]>(MEASURES_FILE, DEFAULT_JUDICIAL_MEASURES);
+      const identifications = readJsonFile<IdentifiedPerson[]>(IDENTIFICATIONS_FILE, INITIAL_IDENTIFIED_PERSONS);
+      const documents = readJsonFile<DriveFile[]>(DOCUMENTS_FILE, []);
+      const auditLogs = readJsonFile<AuditLog[]>(AUDIT_FILE, INITIAL_AUDIT_LOGS);
+
+      const backupPackage = {
+        app: 'Policia Entre Rios - Comisaria de Minoridad y Violencia Familiar',
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        exportedTimestamp: Date.now(),
+        data: {
+          users,
+          measures,
+          identifications,
+          documents,
+          auditLogs,
+        },
+        summary: {
+          totalUsers: users.length,
+          totalMeasures: measures.length,
+          totalIdentifications: identifications.length,
+          totalDocuments: documents.length,
+          totalAuditLogs: auditLogs.length,
+        },
+      };
+
+      console.log(`[Backup] Exportación de respaldo generada exitosamente (${measures.length} medidas, ${identifications.length} personas, ${users.length} usuarios)`);
+      res.json(backupPackage);
+    } catch (err: any) {
+      console.error('[Backup] Error al exportar respaldo:', err);
+      res.status(500).json({ error: err.message || 'Error al generar paquete de copia de seguridad' });
+    }
+  });
+
+  app.post('/api/backup/restore', (req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      const backupData = req.body;
+      if (!backupData || typeof backupData !== 'object') {
+        res.status(400).json({ error: 'Formato de archivo de respaldo inválido' });
+        return;
+      }
+
+      const payload = backupData.data || backupData;
+      const restored = {
+        users: 0,
+        measures: 0,
+        identifications: 0,
+        documents: 0,
+        auditLogs: 0,
+      };
+
+      // 1. Restore Users
+      if (Array.isArray(payload.users) && payload.users.length > 0) {
+        let usersToSave = payload.users as UserProfile[];
+        // Garantizar que superadmin no quede excluido
+        const hasAdmin = usersToSave.some(
+          (u) =>
+            u.id === 'usr-1' ||
+            u.role === 'superadmin' ||
+            u.username === 'admin' ||
+            (u.email && u.email.toLowerCase() === 'leonel.navoni@gmail.com')
+        );
+        if (!hasAdmin) {
+          usersToSave = [INITIAL_USERS[0], ...usersToSave];
+        }
+        writeJsonFile(USERS_FILE, usersToSave);
+        restored.users = usersToSave.length;
+      }
+
+      // 2. Restore Measures
+      if (Array.isArray(payload.measures)) {
+        writeJsonFile(MEASURES_FILE, payload.measures);
+        restored.measures = payload.measures.length;
+      }
+
+      // 3. Restore Identifications
+      if (Array.isArray(payload.identifications)) {
+        writeJsonFile(IDENTIFICATIONS_FILE, payload.identifications);
+        restored.identifications = payload.identifications.length;
+      }
+
+      // 4. Restore Documents
+      if (Array.isArray(payload.documents)) {
+        writeJsonFile(DOCUMENTS_FILE, payload.documents);
+        restored.documents = payload.documents.length;
+      }
+
+      // 5. Restore Audit Logs
+      if (Array.isArray(payload.auditLogs)) {
+        const restoreLog: AuditLog = {
+          id: `audit-restore-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: 'usr-system',
+          userName: 'Sistema de Respaldo',
+          userRole: 'superadmin',
+          action: 'UPDATE_PERMISSIONS',
+          details: `Restauración completa de base de datos desde copia de seguridad (${restored.measures} medidas, ${restored.identifications} personas, ${restored.users} usuarios)`,
+          status: 'SUCCESS',
+        };
+        const mergedLogs = [restoreLog, ...payload.auditLogs].slice(0, 2000);
+        writeJsonFile(AUDIT_FILE, mergedLogs);
+        restored.auditLogs = mergedLogs.length;
+      }
+
+      console.log('[Backup] Restauración aplicada con éxito:', restored);
+      res.json({
+        success: true,
+        message: 'Copia de seguridad restaurada correctamente',
+        restored,
+      });
+    } catch (err: any) {
+      console.error('[Backup] Error al restaurar respaldo:', err);
+      res.status(500).json({ error: err.message || 'Error al restaurar copia de seguridad' });
     }
   });
 

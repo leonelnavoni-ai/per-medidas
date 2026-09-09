@@ -129,7 +129,7 @@ try {
             'email' => $user['email'] ?? '',
             'role' => $user['role'],
             'badgeNumber' => $user['badgeNumber'] ?? $user['badge_number'] ?? '',
-            'department' => $user['department'] ?? 'Comisaría del Menor y V. Familiar',
+            'department' => $user['department'] ?? 'Comisaría de Minoridad y V. Familiar',
             'status' => $user['status'] ?? 'active',
             'lastLogin' => $user['lastLogin']
         ],

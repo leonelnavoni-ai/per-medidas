@@ -16,6 +16,10 @@
   RewriteRule ^api/identifications/?(.*)$ api/identifications.php [L,QSA]
   RewriteRule ^api/upload-pdf/?$ api/upload-pdf.php [L,QSA]
   RewriteRule ^api/documents/?(.*)$ api/documents.php [L,QSA]
+  RewriteRule ^api/pdf/?(.*)$ api/pdf.php [L,QSA]
+
+  # Dedicated PDF streaming and fallback handler
+  RewriteRule ^uploads/pdfs/(.*)$ api/pdf.php?file=$1 [L,QSA]
 
   # Generic API fallback if .php file exists
   RewriteCond %{REQUEST_FILENAME}\.php -f

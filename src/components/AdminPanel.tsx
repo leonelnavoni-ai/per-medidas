@@ -34,6 +34,9 @@ import {
   List,
   FileText,
   UserCheck,
+  Database,
+  UploadCloud,
+  ShieldCheck,
 } from 'lucide-react';
 import { UserWhatsAppModal } from './UserWhatsAppModal';
 import { ApiService } from '../services/apiService';
@@ -59,7 +62,7 @@ interface AdminPanelProps {
   onDisconnectDrive: () => void;
   onUpdateDriveConfig: (searchFolderId: string, uploadFolderId: string) => void;
   onAddAuditLog: (action: any, details: string, targetFile?: string, status?: 'SUCCESS' | 'DENIED') => void;
-  initialSubTab?: 'users' | 'queries' | 'audit' | 'drive';
+  initialSubTab?: 'users' | 'queries' | 'audit' | 'drive' | 'backup';
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -75,13 +78,114 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onAddAuditLog,
   initialSubTab,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive'>(initialSubTab || 'users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive' | 'backup'>(initialSubTab || 'users');
 
   React.useEffect(() => {
     if (initialSubTab) {
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
+
+  // System Backup & Restore States
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleDownloadBackup = async () => {
+    setIsExportingBackup(true);
+    setBackupMessage(null);
+    try {
+      const backupData = await ApiService.exportBackup();
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
+      const filename = `copia_seguridad_policia_er_${dateStr}_${timeStr}.json`;
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      onAddAuditLog(
+        'SEARCH',
+        `Descarga de copia de seguridad completa del sistema (${backupData.summary?.totalMeasures || 0} medidas, ${backupData.summary?.totalIdentifications || 0} personas, ${backupData.summary?.totalUsers || 0} usuarios)`
+      );
+      setBackupMessage({
+        type: 'success',
+        text: `Copia de seguridad descargada exitosamente como "${filename}". Contiene ${backupData.summary?.totalMeasures || 0} medidas y ${backupData.summary?.totalUsers || 0} usuarios.`
+      });
+    } catch (err: any) {
+      console.error('Error al descargar copia de seguridad:', err);
+      setBackupMessage({
+        type: 'error',
+        text: err.message || 'No se pudo descargar la copia de seguridad. Verifique la conexión con el servidor.'
+      });
+    } finally {
+      setIsExportingBackup(false);
+    }
+  };
+
+  const handleRestoreBackupFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm(`¿Confirmas que deseas restaurar la base de datos desde "${file.name}"? Los datos del archivo se integrarán al servidor policial.`)) {
+      event.target.value = '';
+      return;
+    }
+
+    setIsRestoringBackup(true);
+    setBackupMessage(null);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsedData = JSON.parse(content);
+
+        const result = await ApiService.restoreBackup(parsedData);
+        onAddAuditLog(
+          'UPDATE_PERMISSIONS',
+          `Restauración de copia de seguridad aplicada desde archivo "${file.name}"`,
+          undefined,
+          'SUCCESS'
+        );
+
+        setBackupMessage({
+          type: 'success',
+          text: `Copia de seguridad restaurada correctamente: ${result.restored?.measures || 0} medidas, ${result.restored?.identifications || 0} personas y ${result.restored?.users || 0} usuarios integrados. Recargando datos...`
+        });
+
+        // Actualizar usuarios en estado local si vinieron en el respaldo
+        if (parsedData?.data?.users && Array.isArray(parsedData.data.users)) {
+          setUsers(parsedData.data.users);
+        }
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 1800);
+      } catch (err: any) {
+        console.error('Error al procesar archivo de restauración:', err);
+        setBackupMessage({
+          type: 'error',
+          text: err.message || 'El archivo seleccionado no tiene un formato de respaldo JSON válido.'
+        });
+      } finally {
+        setIsRestoringBackup(false);
+        event.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setIsRestoringBackup(false);
+      setBackupMessage({ type: 'error', text: 'Error al leer el archivo desde el dispositivo.' });
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  };
 
   // System Audit Diagnostic State
   const [systemAuditReport, setSystemAuditReport] = useState<any | null>(null);
@@ -249,7 +353,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       name: newUserName.trim(),
       email: newUserEmail.trim().toLowerCase(),
       badgeNumber: newUserBadge.trim() || `LP-${Math.floor(10000 + Math.random() * 90000)}`,
-      department: newUserDepartment.trim() || 'Comisaría del Menor y V. Familiar',
+      department: newUserDepartment.trim() || 'Comisaría de Minoridad y V. Familiar',
       role: newUserRole,
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -510,7 +614,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           role: log.userRole,
           username: fullUser?.username || log.userName.toLowerCase().replace(/\s+/g, '.'),
           badgeNumber: fullUser?.badgeNumber || 'LP-S/D',
-          department: fullUser?.department || 'Comisaría del Menor y Violencia Familiar',
+          department: fullUser?.department || 'Comisaría de Minoridad y Violencia Familiar',
           totalQueries: 0,
           dniQueriesCount: 0,
           measuresQueriesCount: 0,
@@ -617,7 +721,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCopyQueryReport = () => {
     const lines: string[] = [
       '===========================================================',
-      'POLICÍA DE ENTRE RÍOS - COMISARÍA DEL MENOR Y VIOLENCIA FAMILIAR',
+      'POLICÍA DE ENTRE RÍOS - COMISARÍA DE MINORIDAD Y VIOLENCIA FAMILIAR',
       'INFORME OFICIAL DE AUDITORÍA Y TRAZABILIDAD DE CONSULTAS',
       `Fecha de emisión: ${new Date().toLocaleString('es-AR')}`,
       `Total de consultas registradas: ${allQueryLogs.length}`,
@@ -750,8 +854,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <HardDrive className="w-3.5 h-3.5" />
             <span>Base Google Drive</span>
           </button>
+
+          {/* SUBTAB: COPIA DE SEGURIDAD */}
+          <button
+            id="tab-copia-seguridad"
+            onClick={() => setActiveSubTab('backup')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSubTab === 'backup'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-amber-500" />
+            <span>Copia de Seguridad</span>
+          </button>
         </div>
       </div>
+
+      {/* Backup notification alert if active */}
+      {backupMessage && (
+        <div
+          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs animate-in fade-in ${
+            backupMessage.type === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+              : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {backupMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            )}
+            <span>{backupMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setBackupMessage(null)}
+            className="p-1 hover:bg-black/5 rounded-lg text-slate-500 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* TAB 1: GESTIÓN DE USUARIOS Y ROLES */}
       {activeSubTab === 'users' && (
@@ -1441,7 +1585,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               </span>
                             </div>
                             <span className="text-[10px] text-slate-400 block truncate">
-                              Comisaría del Menor y Violencia Familiar
+                              Comisaría de Minoridad y Violencia Familiar
                             </span>
                           </div>
                         </div>
@@ -1968,6 +2112,139 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
+      {/* TAB 5: COPIA DE SEGURIDAD Y RESTAURACIÓN DEL SISTEMA */}
+      {activeSubTab === 'backup' && (
+        <div className="space-y-6 animate-in fade-in">
+          
+          {/* Header Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/20 shadow-sm">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Respaldo Integral y Copia de Seguridad</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                      Servidor Policial Activo
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Permite descargar o restaurar todos los registros de la Comisaría de Minoridad y Violencia Familiar en un solo archivo seguro.
+                  </p>
+                </div>
+              </div>
+
+              {/* Botón Principal de Descarga */}
+              <button
+                id="btn-descargar-copia-seguridad"
+                onClick={handleDownloadBackup}
+                disabled={isExportingBackup}
+                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+              >
+                {isExportingBackup ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Generando Copia de Seguridad...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Descargar Copia de Seguridad (.json)</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Sub-cards: Qué se incluye y opciones de restauración */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+              
+              {/* Card 1: Contenido del respaldo */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 rounded-xl p-4 space-y-3 text-xs">
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <span>¿Qué incluye la Copia de Seguridad?</span>
+                </h3>
+                <ul className="space-y-2 text-slate-600 dark:text-slate-300">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Usuarios y Efectivos Policiales:</strong> Todos los usuarios registrados con sus contraseñas, legajos, roles y permisos asignados.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Medidas Judiciales y Cautelares:</strong> Registro oficial de oficios, expedientes, denunciantes, denunciados y juzgados.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Identificaciones de Personas:</strong> Antecedentes, pedidos de captura, fotos e historial de identificaciones policiales.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span><strong>Historial de Auditoría:</strong> Trazabilidad cronológica de consultas y descargas realizadas por la guardia.</span>
+                  </li>
+                </ul>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    💡 <strong>Consejo para el servidor:</strong> Los archivos PDF subidos físicamente quedan guardados permanentemente en la carpeta <code>uploads/pdfs/</code> del servidor.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2: Restaurar respaldo */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 rounded-xl p-4 space-y-3 text-xs flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <UploadCloud className="w-4 h-4 text-blue-500" />
+                    <span>Restaurar desde un Archivo de Respaldo</span>
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 mt-1">
+                    Si reinstalaste el sistema o necesitas migrar los datos a otra computadora o servidor, selecciona el archivo <code>.json</code> descargado previamente:
+                  </p>
+                </div>
+
+                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 rounded-xl text-amber-800 dark:text-amber-300 text-[11px]">
+                  ⚠️ <strong>Atención:</strong> Al restaurar, se actualizarán los usuarios, medidas e identificaciones existentes con los datos contenidos en el archivo de respaldo.
+                </div>
+
+                <div>
+                  <label className="block w-full">
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleRestoreBackupFile}
+                      disabled={isRestoringBackup}
+                      className="hidden"
+                      id="input-restore-backup"
+                    />
+                    <span
+                      className={`w-full py-2.5 px-4 rounded-xl border border-dashed border-blue-400 dark:border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        isRestoringBackup ? 'opacity-50 pointer-events-none' : ''
+                      }`}
+                    >
+                      {isRestoringBackup ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Restaurando Base de Datos...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4" />
+                          <span>Seleccionar archivo .JSON para Restaurar</span>
+                        </>
+                      )}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      )}
+
       {/* Modal: Agregar Nuevo Usuario */}
       {showAddUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
@@ -2058,7 +2335,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     type="text"
                     value={newUserDepartment}
                     onChange={(e) => setNewUserDepartment(e.target.value)}
-                    placeholder="ej: Comisaría del Menor y V. Familiar"
+                    placeholder="ej: Comisaría de Minoridad y V. Familiar"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -2395,7 +2672,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       type="text"
                       value={editDepartment}
                       onChange={(e) => setEditDepartment(e.target.value)}
-                      placeholder="ej: Comisaría del Menor y V. Familiar"
+                      placeholder="ej: Comisaría de Minoridad y V. Familiar"
                       className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

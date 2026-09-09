@@ -443,4 +443,32 @@ export class ApiService {
     }
     return await safeJson(res);
   }
+
+  static async exportBackup(): Promise<any> {
+    const res = await fetchWithPhpFallback(`/api/backup/export?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+    if (!res.ok) {
+      throw new Error('Error al exportar la copia de seguridad desde el servidor');
+    }
+    return await safeJson(res);
+  }
+
+  static async restoreBackup(backupData: any): Promise<any> {
+    const res = await fetchWithPhpFallback('/api/backup/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backupData),
+    });
+    if (!res.ok) {
+      const err = await safeJson(res).catch(() => ({ error: 'Error en la restauración' }));
+      throw new Error(err.error || 'Error al restaurar la copia de seguridad en el servidor');
+    }
+    return await safeJson(res);
+  }
 }
+

@@ -90,7 +90,7 @@ export const LogoPreviewModal: React.FC<LogoPreviewModalProps> = ({
                     : 'text-slate-600 dark:text-slate-300 hover:text-white'
                 }`}
               >
-                Comisaría del Menor (Adaptado)
+                Comisaría de Minoridad (Adaptado)
               </button>
               <button
                 type="button"
@@ -134,7 +134,7 @@ export const LogoPreviewModal: React.FC<LogoPreviewModalProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-white">
-                        Comisaría del Menor y Violencia Familiar
+                        Comisaría de Minoridad y Violencia Familiar
                       </span>
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
                         v1.0 PWA
@@ -174,7 +174,7 @@ export const LogoPreviewModal: React.FC<LogoPreviewModalProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm sm:text-base text-white tracking-tight">
-                        Comisaría del Menor y Violencia Familiar
+                        Comisaría de Minoridad y Violencia Familiar
                       </span>
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-600/30 text-amber-300 border border-amber-500/40">
                         Policía de Entre Ríos
@@ -202,7 +202,7 @@ export const LogoPreviewModal: React.FC<LogoPreviewModalProps> = ({
                 <PoliceLogo className="w-48 h-48 filter drop-shadow-2xl" variant={selectedVariant} />
                 <span className="text-[11px] text-amber-400 mt-2 font-bold">
                   {selectedVariant === 'adapted'
-                    ? 'Comisaría del Menor y Violencia Familiar'
+                    ? 'Comisaría de Minoridad y Violencia Familiar'
                     : 'Jefatura de Policía - Entre Ríos'}
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">

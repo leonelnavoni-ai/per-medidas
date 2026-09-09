@@ -18,6 +18,7 @@ import {
 import { DriveFile, PermissionSet } from '../types';
 import { formatBytes, formatDate } from '../utils/formatters';
 import { generateSamplePdfBlob, generateJudicialMeasurePdfBlob } from '../utils/pdfGenerator';
+import { base64ToBlob } from '../utils/measureUtils';
 import { PdfCanvasViewer } from './PdfCanvasViewer';
 
 interface PdfViewerModalProps {
@@ -61,8 +62,22 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
     setRotation(0);
     setZoom(100);
 
-    // 1. If it's already a local Blob URL (custom uploaded PDF or pre-generated)
-    if (file.localBlobUrl) {
+    // 0. If file or its measure has embedded base64, restore authentic local Blob URL immediately
+    const base64Content = file.measureData?.pdfBase64 || file.pdfBase64;
+    if (base64Content) {
+      try {
+        const customBlob = base64ToBlob(base64Content);
+        const blobUrl = URL.createObjectURL(customBlob);
+        setActivePdfUrl(blobUrl);
+        setIsLoadingPdf(false);
+        return;
+      } catch (e) {
+        console.warn('Could not decode base64 PDF in viewer:', e);
+      }
+    }
+
+    // 1. If it's already a local Blob URL (starts with blob:)
+    if (file.localBlobUrl && file.localBlobUrl.startsWith('blob:')) {
       setActivePdfUrl(file.localBlobUrl);
       setIsLoadingPdf(false);
       return;

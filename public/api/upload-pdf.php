@@ -28,22 +28,36 @@ if ($ext !== 'pdf') {
     exit();
 }
 
-// Directorio en el servidor web
-$targetDir = dirname(__DIR__, 2) . '/uploads/pdfs';
-if (!is_dir($targetDir)) {
-    @mkdir($targetDir, 0755, true);
+// Directorio en el servidor web (public_html/uploads/pdfs)
+$primaryDir = dirname(__DIR__) . '/uploads/pdfs';
+$secondaryDir = dirname(__DIR__, 2) . '/uploads/pdfs';
+
+if (!is_dir($primaryDir)) {
+    @mkdir($primaryDir, 0755, true);
+}
+if (!is_dir($secondaryDir)) {
+    @mkdir($secondaryDir, 0755, true);
 }
 
 $safeBase = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
 $safeBase = substr($safeBase, 0, 50);
 $uniqueName = time() . '_' . $safeBase . '.pdf';
-$targetFilePath = $targetDir . '/' . $uniqueName;
+$targetFilePath = $primaryDir . '/' . $uniqueName;
 
 if (!move_uploaded_file($file['tmp_name'], $targetFilePath)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'No se pudo guardar el archivo PDF en el directorio uploads del servidor. Verifique permisos 755.']);
-    exit();
+    // Si falló en la ruta primaria, intentar en la secundaria
+    $targetFilePath = $secondaryDir . '/' . $uniqueName;
+    if (!move_uploaded_file($file['tmp_name'], $targetFilePath)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'No se pudo guardar el archivo PDF en el directorio uploads del servidor. Verifique permisos 755.']);
+        exit();
+    }
+} else {
+    // Copiar también a la ruta secundaria para máxima compatibilidad
+    @copy($targetFilePath, $secondaryDir . '/' . $uniqueName);
 }
+
+@chmod($targetFilePath, 0644);
 
 $fileUrl = '/uploads/pdfs/' . $uniqueName;
 $fileSize = filesize($targetFilePath);

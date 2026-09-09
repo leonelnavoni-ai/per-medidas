@@ -52,7 +52,7 @@ try {
                     'email' => 'leonel.navoni@gmail.com',
                     'role' => 'superadmin',
                     'badgeNumber' => '30557',
-                    'department' => 'Comisaría del Menor y V. Familiar',
+                    'department' => 'Comisaría de Minoridad y V. Familiar',
                     'status' => 'active',
                     'createdAt' => date('c'),
                     'lastLogin' => date('c')
@@ -65,7 +65,7 @@ try {
                     'email' => 'leonel.navoni@gmail.com',
                     'role' => 'superadmin',
                     'badgeNumber' => '30557',
-                    'department' => 'Comisaría del Menor y V. Familiar',
+                    'department' => 'Comisaría de Minoridad y V. Familiar',
                     'status' => 'active',
                     'createdAt' => date('c'),
                     'lastLogin' => date('c')
@@ -132,7 +132,7 @@ try {
                     'email' => 'leonel.navoni@gmail.com',
                     'role' => 'superadmin',
                     'badgeNumber' => '30557',
-                    'department' => 'Comisaría del Menor y V. Familiar',
+                    'department' => 'Comisaría de Minoridad y V. Familiar',
                     'status' => 'active',
                     'createdAt' => date('c'),
                     'lastLogin' => date('c')
@@ -171,7 +171,7 @@ try {
                             ':email' => $u['email'] ?? null,
                             ':role' => $u['role'] ?? 'officer',
                             ':badge_number' => $u['badgeNumber'] ?? '00000',
-                            ':department' => $u['department'] ?? 'Comisaría del Menor y V. Familiar',
+                            ':department' => $u['department'] ?? 'Comisaría de Minoridad y V. Familiar',
                             ':status' => $u['status'] ?? 'active'
                         ]);
                     }
@@ -229,7 +229,7 @@ try {
                         ':email' => $userToSave['email'] ?? null,
                         ':role' => $userToSave['role'] ?? 'officer',
                         ':badge_number' => $userToSave['badgeNumber'] ?? '',
-                        ':department' => $userToSave['department'] ?? 'Comisaría del Menor y V. Familiar',
+                        ':department' => $userToSave['department'] ?? 'Comisaría de Minoridad y V. Familiar',
                         ':status' => $userToSave['status'] ?? 'active'
                     ]);
                 } catch (Exception $e) {}

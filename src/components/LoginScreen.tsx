@@ -16,7 +16,7 @@ import { ApiService } from '../services/apiService';
 
 interface LoginScreenProps {
   users: UserProfile[];
-  onLogin: (user: UserProfile) => void;
+  onLogin: (user: UserProfile, remember?: boolean) => void;
   isServerOnline?: boolean;
   isServerSyncing?: boolean;
   onRetryConnection?: () => void;
@@ -30,6 +30,10 @@ const normalizeText = (str: string) =>
     .trim()
     .toLowerCase();
 
+const STORAGE_KEY_REMEMBER = 'police_app_remember_user_data';
+const STORAGE_KEY_IDENTIFIER = 'police_app_saved_identifier';
+const STORAGE_KEY_PASSWORD = 'police_app_saved_password';
+
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   users,
   onLogin,
@@ -37,12 +41,70 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   isServerSyncing = false,
   onRetryConnection,
 }) => {
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [rememberSession, setRememberSession] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [identifier, setIdentifier] = useState<string>(() => {
+    try {
+      const isRemembered = localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
+      if (isRemembered) {
+        return localStorage.getItem(STORAGE_KEY_IDENTIFIER) || '';
+      }
+    } catch {}
+    return '';
+  });
+
+  const [password, setPassword] = useState<string>(() => {
+    try {
+      const isRemembered = localStorage.getItem(STORAGE_KEY_REMEMBER) === 'true';
+      if (isRemembered) {
+        return localStorage.getItem(STORAGE_KEY_PASSWORD) || '';
+      }
+    } catch {}
+    return '';
+  });
+
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberSession, setRememberSession] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleRememberToggle = (checked: boolean) => {
+    setRememberSession(checked);
+    if (!checked) {
+      try {
+        localStorage.removeItem(STORAGE_KEY_REMEMBER);
+        localStorage.removeItem(STORAGE_KEY_IDENTIFIER);
+        localStorage.removeItem(STORAGE_KEY_PASSWORD);
+      } catch (e) {
+        console.warn('Error al limpiar datos guardados:', e);
+      }
+    }
+  };
+
+  const saveOrClearCredentials = (savedIdentifier: string, savedPassword: string) => {
+    if (rememberSession) {
+      try {
+        localStorage.setItem(STORAGE_KEY_REMEMBER, 'true');
+        localStorage.setItem(STORAGE_KEY_IDENTIFIER, savedIdentifier);
+        localStorage.setItem(STORAGE_KEY_PASSWORD, savedPassword);
+      } catch (e) {
+        console.warn('Error al guardar credenciales en almacenamiento local:', e);
+      }
+    } else {
+      try {
+        localStorage.removeItem(STORAGE_KEY_REMEMBER);
+        localStorage.removeItem(STORAGE_KEY_IDENTIFIER);
+        localStorage.removeItem(STORAGE_KEY_PASSWORD);
+      } catch (e) {
+        console.warn('Error al limpiar credenciales:', e);
+      }
+    }
+  };
 
   // Active users loaded from the web server with initial users fallback
   const allKnownUsers = useMemo(() => {
@@ -78,8 +140,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     try {
       const loginResult = await ApiService.login(rawTerm, pass);
       if (loginResult && loginResult.user) {
+        saveOrClearCredentials(rawTerm, pass);
         setIsLoading(false);
-        onLogin(loginResult.user);
+        onLogin(loginResult.user, rememberSession);
         return;
       }
     } catch (serverErr: any) {
@@ -204,8 +267,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       username: matched.username || (matched.badgeNumber ? matched.badgeNumber.toLowerCase() : 'policia'),
     };
 
+    saveOrClearCredentials(rawTerm, pass);
     setIsLoading(false);
-    onLogin(authenticatedUser);
+    onLogin(authenticatedUser, rememberSession);
   };
 
   return (
@@ -244,12 +308,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </div>
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-black text-white mt-2.5 tracking-tight relative z-10">
-              Comisaría del Menor y V. Familiar
-            </h1>
-            <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto font-medium relative z-10">
-              Sistema Integral de Gestión de Medidas Judiciales y Oficios
-            </p>
+            <div className="mt-3 relative z-10 px-2">
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
+                Comisaría de Minoridad
+              </h1>
+              <p className="text-base sm:text-lg font-bold text-amber-300/90 tracking-wide mt-0.5">
+                y Violencia Familiar
+              </p>
+              <p className="text-xs text-slate-300 mt-2 max-w-xs mx-auto font-medium">
+                Sistema Integral de Gestión de Medidas Judiciales y Oficios
+              </p>
+            </div>
           </div>
 
           {/* Form Content */}
@@ -341,17 +410,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </div>
               </div>
 
-              {/* Remember session checkbox */}
+              {/* Remember session & user data checkbox */}
               <div className="flex items-center justify-between pt-0.5">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none hover:text-white transition-colors">
                   <input
+                    id="checkbox-remember-credentials"
                     type="checkbox"
                     checked={rememberSession}
-                    onChange={(e) => setRememberSession(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+                    onChange={(e) => handleRememberToggle(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
                   />
-                  <span>Recordar sesión en este dispositivo</span>
+                  <span>Recordar mis datos en este dispositivo</span>
                 </label>
+                {rememberSession && identifier && (
+                  <span className="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium animate-in fade-in duration-200">
+                    <BadgeCheck className="w-3 h-3 text-blue-400" />
+                    <span>Guardado</span>
+                  </span>
+                )}
               </div>
 
               {/* Submit button */}
@@ -421,7 +497,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
 
         <div className="text-center mt-3 text-xs text-slate-500">
-          Gobierno de Entre Ríos • Comisaría del Menor y Violencia Familiar
+          Gobierno de Entre Ríos • Comisaría de Minoridad y Violencia Familiar
         </div>
       </div>
     </div>

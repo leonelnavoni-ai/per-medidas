@@ -91,7 +91,7 @@ export const UserWhatsAppModal: React.FC<UserWhatsAppModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-emerald-100/90 mt-0.5">
-                Policía de Entre Ríos - Comisaría del Menor y Violencia Familiar
+                Policía de Entre Ríos - Comisaría de Minoridad y Violencia Familiar
               </p>
             </div>
           </div>
