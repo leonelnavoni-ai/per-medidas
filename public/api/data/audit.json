@@ -1,0 +1,133 @@
+[
+  {
+    "id": "test-log-1788911381779",
+    "userId": "usr-1",
+    "userName": "Leonel Navoni",
+    "userRole": "superadmin",
+    "action": "SEARCH",
+    "details": "Test audit verification",
+    "timestamp": "2026-09-08T23:49:41.779Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-audit-001",
+    "userId": "usr-1788786602829",
+    "userName": "Sargento Navoni Leonel",
+    "userRole": "superadmin",
+    "action": "LOGIN",
+    "details": "Inicio de sesión seguro en estación de trabajo policial. Autenticación exitosa por legajo 30557.",
+    "timestamp": "2026-09-08T23:38:38.168Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-audit-002",
+    "userId": "usr-1",
+    "userName": "Leonel Navoni",
+    "userRole": "superadmin",
+    "action": "LOGIN",
+    "details": "Inicio de sesión de Super Administrador verificado mediante credenciales maestras.",
+    "timestamp": "2026-09-08T23:40:48.027Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-query-1",
+    "userId": "usr-3",
+    "userName": "Roberto Gómez",
+    "userRole": "editor",
+    "action": "SEARCH",
+    "details": "Consulta de Persona / DNI: \"38452190\" - Ciudadano: \"BROIN IVAN GUILLERMO\" - Verificación de medidas cautelares",
+    "timestamp": "2026-09-08T14:35:10Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-query-2",
+    "userId": "usr-2",
+    "userName": "Carolina Méndez",
+    "userRole": "admin",
+    "action": "SEARCH",
+    "details": "Consulta de Medida Judicial: \"Prohibición de Acercamiento\" - Oficio N° 1033 - Juzgado de Garantías",
+    "timestamp": "2026-09-08T13:20:44Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-query-3",
+    "userId": "usr-4",
+    "userName": "Valeria Soria",
+    "userRole": "viewer",
+    "action": "VIEW",
+    "targetFileName": "Oficio_Judicial_1086_Medida_Proteccion.pdf",
+    "details": "Visualización de Oficio Judicial N° 1086/26 - Jdo. Familia - Prohibición de acercamiento",
+    "timestamp": "2026-09-08T11:45:18Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-query-4",
+    "userId": "usr-3",
+    "userName": "Roberto Gómez",
+    "userRole": "editor",
+    "action": "SEARCH",
+    "details": "Consulta de Persona / DNI: \"41982734\" - Ciudadano: \"CORDOBA FACUNDO EZEQUIEL\"",
+    "timestamp": "2026-09-08T10:12:05Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-query-5",
+    "userId": "usr-1",
+    "userName": "Leonel Navoni",
+    "userRole": "superadmin",
+    "action": "SEARCH",
+    "details": "Búsqueda general de medidas judiciales: Causa \"Carrizo Ramona Mabel c/ Broin Ivan Guillermo\"",
+    "timestamp": "2026-09-07T18:50:30Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-query-6",
+    "userId": "usr-4",
+    "userName": "Valeria Soria",
+    "userRole": "viewer",
+    "action": "SEARCH",
+    "details": "Consulta de Persona Identificada: \"CONTRERAS ALEXANDRO DAMIAN\" - Verificación en operativo de guardia",
+    "timestamp": "2026-09-07T16:22:15Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-ident-1",
+    "userId": "usr-3",
+    "userName": "Roberto Gómez",
+    "userRole": "editor",
+    "action": "CREATE_PERSON_IDENTIFICATION",
+    "details": "Nueva identificación policial registrada: BROIN IVAN GUILLERMO (DNI 38452190) - Estado: Con medida cautelar",
+    "timestamp": "2026-09-07T09:50:00Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-ident-2",
+    "userId": "usr-2",
+    "userName": "Carolina Méndez",
+    "userRole": "admin",
+    "action": "CREATE_PERSON_IDENTIFICATION",
+    "details": "Nueva identificación policial registrada: CORDOBA FACUNDO EZEQUIEL (DNI 41982734) - Estado: Sin impedimento",
+    "timestamp": "2026-09-07T08:20:00Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-ident-3",
+    "userId": "usr-1",
+    "userName": "Leonel Navoni",
+    "userRole": "superadmin",
+    "action": "CREATE_PERSON_IDENTIFICATION",
+    "details": "Nueva identificación policial registrada: CONTRERAS ALEXANDRO DAMIAN (DNI 39201844) - Estado: Con medida cautelar",
+    "timestamp": "2026-09-06T23:45:00Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "log-drive-1",
+    "userId": "usr-1",
+    "userName": "Leonel Navoni",
+    "userRole": "superadmin",
+    "action": "CONNECT_DRIVE",
+    "details": "Conexión OAuth2 autorizada con el servicio Google Drive API v3. Carpeta: Medidas y Oficios Judiciales.",
+    "timestamp": "2026-09-06T15:28:50Z",
+    "status": "SUCCESS"
+  }
+]

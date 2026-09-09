@@ -206,6 +206,15 @@ async function startServer() {
       const incoming = req.body;
       const currentUsers = readJsonFile<UserProfile[]>(USERS_FILE, INITIAL_USERS);
 
+      if (incoming && typeof incoming === 'object' && incoming.action === 'delete' && incoming.id) {
+        const deleteId = incoming.id;
+        const filtered = currentUsers.filter((u) => u.id !== deleteId);
+        writeJsonFile(USERS_FILE, filtered);
+        console.log(`[Users] Usuario eliminado vía POST action=delete en servidor: ${deleteId}`);
+        res.json({ success: true, deletedId: deleteId, remaining: filtered.length });
+        return;
+      }
+
       if (Array.isArray(incoming)) {
         // Aseguramos que el SuperAdmin Leonel Navoni siempre exista
         let nextUsers = [...incoming];
@@ -278,14 +287,18 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/users/:id', (req, res) => {
+  app.delete(['/api/users/:id', '/api/users'], (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id || (req.query.id as string) || req.body?.id;
+      if (!id) {
+        res.status(400).json({ error: 'ID de usuario requerido' });
+        return;
+      }
       const users = readJsonFile<UserProfile[]>(USERS_FILE, INITIAL_USERS);
       const filtered = users.filter((u) => u.id !== id);
       writeJsonFile(USERS_FILE, filtered);
       console.log(`[Users] Usuario eliminado en servidor: ${id}`);
-      res.json({ success: true });
+      res.json({ success: true, deletedId: id, remaining: filtered.length });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Error al eliminar usuario en servidor' });
     }

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "usr-1788786602829",
+    "username": "30557",
+    "password": "NAVONI30557",
+    "name": "SARGENTO NAVONI LEONEL",
+    "email": "leonel.navoni@gmail.com",
+    "badgeNumber": "30557",
+    "department": "COMISARIA DEL MENOR Y VIOLENCIA FAMILIAR",
+    "role": "superadmin",
+    "status": "active",
+    "createdAt": "2026-09-07T13:10:02.829Z",
+    "lastLogin": "2026-09-08T23:38:38.168Z"
+  },
+  {
+    "id": "usr-1",
+    "name": "Leonel Navoni",
+    "email": "leonel.navoni@gmail.com",
+    "role": "superadmin",
+    "status": "active",
+    "createdAt": "2026-01-10T08:00:00Z",
+    "lastLogin": "2026-09-08T23:40:48.027Z",
+    "username": "admin",
+    "password": "almorial1"
+  },
+  {
+    "id": "usr-3",
+    "name": "Roberto Gómez",
+    "username": "rgomez",
+    "password": "admin123",
+    "badgeNumber": "LP-48291",
+    "email": "roberto.gomez@empresa.com",
+    "department": "Investigaciones",
+    "role": "editor",
+    "status": "active",
+    "createdAt": "2026-03-01T11:20:00Z",
+    "lastLogin": "2026-09-06T12:00:00Z"
+  },
+  {
+    "id": "usr-4",
+    "name": "Valeria Soria",
+    "username": "vsoria",
+    "password": "admin123",
+    "badgeNumber": "LP-59102",
+    "email": "valeria.soria@empresa.com",
+    "department": "Guardia y Patrulla",
+    "role": "viewer",
+    "status": "active",
+    "createdAt": "2026-04-12T14:45:00Z",
+    "lastLogin": "2026-09-04T10:15:00Z"
+  },
+  {
+    "id": "usr-5",
+    "name": "Lucas Pardo",
+    "username": "lpardo",
+    "password": "admin123",
+    "badgeNumber": "LP-66281",
+    "email": "lucas.pardo@externo.com",
+    "department": "Oficialía de Guardia",
+    "role": "viewer",
+    "status": "active",
+    "createdAt": "2026-05-20T16:00:00Z",
+    "lastLogin": "2026-08-11T09:30:00Z"
+  }
+]

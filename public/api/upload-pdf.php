@@ -49,21 +49,35 @@ $fileUrl = '/uploads/pdfs/' . $uniqueName;
 $fileSize = filesize($targetFilePath);
 $docId = 'doc-' . time() . '-' . rand(100, 999);
 
-try {
-    // Registrar en SQL si existe la tabla
-    $stmt = $pdo->prepare("
-        INSERT INTO documentos_pdf (id, name, file_url, size, mime_type, original_name, created_at)
-        VALUES (:id, :name, :file_url, :size, 'application/pdf', :orig_name, NOW())
-    ");
-    $stmt->execute([
-        ':id' => $docId,
-        ':name' => $origName,
-        ':file_url' => $fileUrl,
-        ':size' => $fileSize,
-        ':orig_name' => $origName
-    ]);
-} catch (Exception $e) {
-    // Si falla el insert de SQL, el archivo físico de todos modos quedó guardado en el servidor
+$newDoc = [
+    'id' => $docId,
+    'name' => $origName,
+    'fileUrl' => $fileUrl,
+    'size' => $fileSize,
+    'mimeType' => 'application/pdf',
+    'originalName' => $origName,
+    'createdAt' => date('c')
+];
+
+// Guardar en documents.json
+$currDocs = readJsonData('documents.json', []);
+array_unshift($currDocs, $newDoc);
+writeJsonData('documents.json', $currDocs);
+
+if ($pdo !== null) {
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO documentos_pdf (id, name, file_url, size, mime_type, original_name, created_at)
+            VALUES (:id, :name, :file_url, :size, 'application/pdf', :orig_name, NOW())
+        ");
+        $stmt->execute([
+            ':id' => $docId,
+            ':name' => $origName,
+            ':file_url' => $fileUrl,
+            ':size' => $fileSize,
+            ':orig_name' => $origName
+        ]);
+    } catch (Exception $e) {}
 }
 
 echo json_encode([

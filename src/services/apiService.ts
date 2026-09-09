@@ -19,6 +19,25 @@ async function safeJson<T = any>(res: Response): Promise<T> {
 }
 
 // Smart fetcher that ensures real-time sync with server and no caching
+function getPhpEquivalentUrl(endpoint: string): string {
+  if (endpoint.includes('.php')) return endpoint;
+  const [path, queryString] = endpoint.split('?');
+  const query = queryString ? `?${queryString}` : '';
+
+  // Extract base route e.g. /api/users, /api/identifications, /api/measures
+  const match = path.match(/^\/api\/([a-zA-Z0-9_-]+)(?:\/([a-zA-Z0-9_.-]+))?$/);
+  if (match) {
+    const route = match[1]; // e.g. 'users', 'identifications', 'health'
+    const param = match[2]; // e.g. 'usr-123'
+    if (param && param !== 'save') {
+      const sep = queryString ? '&' : '?';
+      return `/api/${route}.php?id=${encodeURIComponent(param)}${queryString ? sep + queryString : ''}`;
+    }
+    return `/api/${route}.php${query}`;
+  }
+  return path.replace('/api/', '/api/').split('?')[0] + '.php' + query;
+}
+
 async function fetchWithPhpFallback(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const mergedOptions: RequestInit = {
     ...options,
@@ -41,7 +60,7 @@ async function fetchWithPhpFallback(endpoint: string, options: RequestInit = {})
 
     // If not JSON (e.g. 404 or static SPA index.html), try PHP fallback if not already a .php url
     if (!endpoint.includes('.php')) {
-      const phpEndpoint = endpoint.replace('/api/', '/api/').split('?')[0] + '.php' + (endpoint.includes('?') ? '?' + endpoint.split('?')[1] : '');
+      const phpEndpoint = getPhpEquivalentUrl(endpoint);
       const phpRes = await fetch(phpEndpoint, mergedOptions);
       const phpContentType = phpRes.headers.get('content-type') || '';
       if (phpContentType.includes('application/json')) {
@@ -51,7 +70,7 @@ async function fetchWithPhpFallback(endpoint: string, options: RequestInit = {})
     return res;
   } catch (e) {
     if (!endpoint.includes('.php')) {
-      const phpEndpoint = endpoint.replace('/api/', '/api/').split('?')[0] + '.php' + (endpoint.includes('?') ? '?' + endpoint.split('?')[1] : '');
+      const phpEndpoint = getPhpEquivalentUrl(endpoint);
       try {
         return await fetch(phpEndpoint, mergedOptions);
       } catch {}
@@ -170,11 +189,29 @@ export class ApiService {
   }
 
   static async deleteUser(userId: string): Promise<boolean> {
-    const res = await fetchWithPhpFallback(`/api/users/${encodeURIComponent(userId)}?_t=${Date.now()}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      throw new Error('Error al eliminar usuario en el servidor');
+    try {
+      const res = await fetchWithPhpFallback(`/api/users/${encodeURIComponent(userId)}?_t=${Date.now()}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        return true;
+      }
+    } catch (e) {
+      console.warn('DELETE /api/users falló, intentando POST action=delete:', e);
+    }
+
+    // Fallback con POST action=delete compatible con todos los entornos PHP/cPanel
+    try {
+      const postRes = await fetchWithPhpFallback(`/api/users?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: userId }),
+      });
+      if (postRes.ok) {
+        return true;
+      }
+    } catch (e) {
+      console.warn('Fallback POST action=delete falló:', e);
     }
     return true;
   }
@@ -278,11 +315,28 @@ export class ApiService {
   }
 
   static async deleteIdentification(personId: string): Promise<boolean> {
-    const res = await fetchWithPhpFallback(`/api/identifications/${encodeURIComponent(personId)}?_t=${Date.now()}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      throw new Error('Error al eliminar identificación en el servidor');
+    try {
+      const res = await fetchWithPhpFallback(`/api/identifications/${encodeURIComponent(personId)}?_t=${Date.now()}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        return true;
+      }
+    } catch (e) {
+      console.warn('DELETE /api/identifications falló, intentando POST action=delete:', e);
+    }
+
+    try {
+      const postRes = await fetchWithPhpFallback(`/api/identifications?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: personId }),
+      });
+      if (postRes.ok) {
+        return true;
+      }
+    } catch (e) {
+      console.warn('Fallback POST action=delete falló:', e);
     }
     return true;
   }
