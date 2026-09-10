@@ -506,7 +506,22 @@ async function startServer() {
 
   app.post('/api/measures', (req, res) => {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
       const incoming = req.body;
+      const currentList = readJsonFile<JudicialMeasure[]>(MEASURES_FILE, DEFAULT_JUDICIAL_MEASURES);
+
+      // Handle delete action payload
+      if (incoming && typeof incoming === 'object' && incoming.action === 'delete' && incoming.id) {
+        const filtered = currentList.filter((m) => m.id !== incoming.id);
+        writeJsonFile(MEASURES_FILE, filtered);
+        console.log(`[Measures] Medida judicial eliminada vía POST action=delete: ${incoming.id}`);
+        res.json({ success: true, deletedId: incoming.id, count: filtered.length });
+        return;
+      }
+
       if (!Array.isArray(incoming)) {
         res.status(400).json({ error: 'El cuerpo debe ser una lista de medidas judiciales' });
         return;
@@ -516,6 +531,23 @@ async function startServer() {
       res.json(incoming);
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Error al guardar medidas en servidor' });
+    }
+  });
+
+  app.delete('/api/measures/:id', (req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      const { id } = req.params;
+      const currentList = readJsonFile<JudicialMeasure[]>(MEASURES_FILE, DEFAULT_JUDICIAL_MEASURES);
+      const filtered = currentList.filter((m) => m.id !== id);
+      writeJsonFile(MEASURES_FILE, filtered);
+      console.log(`[Measures] Medida judicial eliminada en servidor (DELETE): ${id}`);
+      res.json({ success: true, deletedId: id, count: filtered.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Error al eliminar medida judicial en servidor' });
     }
   });
 
@@ -769,7 +801,7 @@ async function startServer() {
   });
 
   // 10. Complete System Backup & Restore APIs
-  app.get('/api/backup/export', (_req, res) => {
+  const handleBackupExport = (_req: express.Request, res: express.Response) => {
     try {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
@@ -808,9 +840,13 @@ async function startServer() {
       console.error('[Backup] Error al exportar respaldo:', err);
       res.status(500).json({ error: err.message || 'Error al generar paquete de copia de seguridad' });
     }
-  });
+  };
 
-  app.post('/api/backup/restore', (req, res) => {
+  app.get('/api/backup/export', handleBackupExport);
+  app.get('/api/backup', handleBackupExport);
+  app.get('/api/backup.php', handleBackupExport);
+
+  const handleBackupRestore = (req: express.Request, res: express.Response) => {
     try {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
@@ -894,7 +930,11 @@ async function startServer() {
       console.error('[Backup] Error al restaurar respaldo:', err);
       res.status(500).json({ error: err.message || 'Error al restaurar copia de seguridad' });
     }
-  });
+  };
+
+  app.post('/api/backup/restore', handleBackupRestore);
+  app.post('/api/backup', handleBackupRestore);
+  app.post('/api/backup.php', handleBackupRestore);
 
   // ==========================================
   // VITE & STATIC FILES SERVING

@@ -46,7 +46,9 @@ import {
   AuditLog,
   DriveConnectionState,
   PermissionSet,
-  ROLE_DEFAULT_PERMISSIONS
+  ROLE_DEFAULT_PERMISSIONS,
+  JudicialMeasure,
+  IdentifiedPerson,
 } from '../types';
 import { formatDate } from '../utils/formatters';
 import { DEFAULT_DRIVE_FOLDER_ID, DEFAULT_DRIVE_FOLDER_URL } from '../data/initialData';
@@ -63,6 +65,11 @@ interface AdminPanelProps {
   onUpdateDriveConfig: (searchFolderId: string, uploadFolderId: string) => void;
   onAddAuditLog: (action: any, details: string, targetFile?: string, status?: 'SUCCESS' | 'DENIED') => void;
   initialSubTab?: 'users' | 'queries' | 'audit' | 'drive' | 'backup';
+  measures?: JudicialMeasure[];
+  identifications?: IdentifiedPerson[];
+  onRestoreMeasures?: (measures: JudicialMeasure[]) => void;
+  onRestoreIdentifications?: (identifications: IdentifiedPerson[]) => void;
+  onRestoreAuditLogs?: (logs: AuditLog[]) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -77,6 +84,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onUpdateDriveConfig,
   onAddAuditLog,
   initialSubTab,
+  measures,
+  identifications,
+  onRestoreMeasures,
+  onRestoreIdentifications,
+  onRestoreAuditLogs,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive' | 'backup'>(initialSubTab || 'users');
 
@@ -95,7 +107,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsExportingBackup(true);
     setBackupMessage(null);
     try {
-      const backupData = await ApiService.exportBackup();
+      const backupData = await ApiService.exportBackup({
+        measures,
+        identifications,
+        users,
+        auditLogs,
+      });
       const dateStr = new Date().toISOString().slice(0, 10);
       const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
       const filename = `copia_seguridad_policia_er_${dateStr}_${timeStr}.json`;
@@ -110,13 +127,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
+      const totalMeasures = backupData.summary?.totalMeasures ?? (backupData.data?.measures?.length || 0);
+      const totalIdents = backupData.summary?.totalIdentifications ?? (backupData.data?.identifications?.length || 0);
+      const totalUsers = backupData.summary?.totalUsers ?? (backupData.data?.users?.length || 0);
+
       onAddAuditLog(
         'SEARCH',
-        `Descarga de copia de seguridad completa del sistema (${backupData.summary?.totalMeasures || 0} medidas, ${backupData.summary?.totalIdentifications || 0} personas, ${backupData.summary?.totalUsers || 0} usuarios)`
+        `Descarga de copia de seguridad completa del sistema (${totalMeasures} medidas, ${totalIdents} personas, ${totalUsers} usuarios)`
       );
       setBackupMessage({
         type: 'success',
-        text: `Copia de seguridad descargada exitosamente como "${filename}". Contiene ${backupData.summary?.totalMeasures || 0} medidas y ${backupData.summary?.totalUsers || 0} usuarios.`
+        text: `Copia de seguridad descargada exitosamente como "${filename}". Contiene ${totalMeasures} medidas, ${totalIdents} personas y ${totalUsers} usuarios.`
       });
     } catch (err: any) {
       console.error('Error al descargar copia de seguridad:', err);
@@ -147,7 +168,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const content = e.target?.result as string;
         const parsedData = JSON.parse(content);
 
-        const result = await ApiService.restoreBackup(parsedData);
+        const result = await ApiService.restoreBackup(parsedData, (payload) => {
+          if (payload.users && Array.isArray(payload.users)) {
+            setUsers(payload.users);
+          }
+          if (payload.measures && Array.isArray(payload.measures) && onRestoreMeasures) {
+            onRestoreMeasures(payload.measures);
+          }
+          if (payload.identifications && Array.isArray(payload.identifications) && onRestoreIdentifications) {
+            onRestoreIdentifications(payload.identifications);
+          }
+          if (payload.auditLogs && Array.isArray(payload.auditLogs) && onRestoreAuditLogs) {
+            onRestoreAuditLogs(payload.auditLogs);
+          }
+        });
+
         onAddAuditLog(
           'UPDATE_PERMISSIONS',
           `Restauración de copia de seguridad aplicada desde archivo "${file.name}"`,
@@ -155,15 +190,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           'SUCCESS'
         );
 
+        const modeText = result.localOnly ? ' (almacenamiento local seguro)' : ' (servidor sincronizado)';
         setBackupMessage({
           type: 'success',
-          text: `Copia de seguridad restaurada correctamente: ${result.restored?.measures || 0} medidas, ${result.restored?.identifications || 0} personas y ${result.restored?.users || 0} usuarios integrados. Recargando datos...`
+          text: `Copia de seguridad restaurada correctamente${modeText}: ${result.restored?.measures || 0} medidas, ${result.restored?.identifications || 0} personas y ${result.restored?.users || 0} usuarios integrados. Recargando datos...`
         });
-
-        // Actualizar usuarios en estado local si vinieron en el respaldo
-        if (parsedData?.data?.users && Array.isArray(parsedData.data.users)) {
-          setUsers(parsedData.data.users);
-        }
 
         setTimeout(() => {
           window.location.reload();

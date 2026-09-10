@@ -171,6 +171,7 @@ export type AuditAction =
   | 'UPLOAD' 
   | 'CREATE_MEASURE'
   | 'UPDATE_MEASURE'
+  | 'DELETE_MEASURE'
   | 'DELETE' 
   | 'SEARCH' 
   | 'CONNECT_DRIVE' 

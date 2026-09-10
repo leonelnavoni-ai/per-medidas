@@ -1,15 +1,78 @@
 import { JudicialMeasure, UserProfile, IdentifiedPerson } from '../types';
 
 /**
+ * Resolves the active logged-in user profile, falling back to local/session storage if needed.
+ */
+export function resolveCurrentUser(sender?: UserProfile | null): UserProfile {
+  if (sender && sender.name && sender.name.trim()) {
+    return sender;
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const stored =
+        sessionStorage.getItem('police_app_current_user_data') ||
+        localStorage.getItem('police_app_current_user_data');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.name) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Error retrieving current user from storage in whatsappShare:', e);
+    }
+  }
+  return sender || {
+    id: 'usr-1788786602829',
+    name: 'SARGENTO NAVONI LEONEL',
+    role: 'superadmin',
+    badgeNumber: '30557',
+    department: 'COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR',
+    email: 'leonel.navoni@gmail.com',
+    status: 'active',
+    createdAt: '2026-09-07T13:10:02.829Z',
+  };
+}
+
+/**
+ * Formats the officer sender line dynamically based on the currently logged-in user:
+ * e.g. "👮‍♂️ *Enviado por:* SARGENTO NAVONI LEONEL (Legajo: 30557) - COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR"
+ */
+export function formatOfficerSenderSignature(sender?: UserProfile | null, prefix: string = 'Enviado por'): string {
+  const activeUser = resolveCurrentUser(sender);
+
+  // Officer name always in uppercase as specified
+  const officerName = (activeUser.name || 'Personal Policial').trim().toUpperCase();
+
+  // Legajo extraction (badgeNumber or numeric username/badge)
+  const rawBadge = (activeUser.badgeNumber || (/^\d+$/.test(activeUser.username || '') ? activeUser.username : '') || '').trim();
+  const cleanLegajo = rawBadge.replace(/^LP-?/i, '').trim();
+  const badgeInfo = rawBadge ? ` (Legajo: ${cleanLegajo || rawBadge})` : '';
+
+  // Department normalization (defaults to COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR)
+  const rawDep = (activeUser.department || 'COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR').trim();
+  let depFormatted: string;
+  if (/minoridad|violencia\s+familiar|menor/i.test(rawDep)) {
+    depFormatted = 'COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR';
+  } else {
+    depFormatted = rawDep.toUpperCase();
+  }
+  const depInfo = depFormatted ? ` - ${depFormatted}` : ' - COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR';
+
+  return `👮‍♂️ *${prefix}:* ${officerName}${badgeInfo}${depInfo}`;
+}
+
+/**
  * Builds a clean, professional markdown-formatted WhatsApp message
  * containing the judicial measure data, official court document link/status,
- * and sender identity.
+ * and sender identity of the logged-in user.
  */
 export function buildMeasureWhatsAppMessage(
   measure: JudicialMeasure,
-  sender: UserProfile,
+  sender?: UserProfile | null,
   customNote?: string
 ): string {
+  const activeUser = resolveCurrentUser(sender);
   const lines: string[] = [];
 
   lines.push('🚨 *POLICÍA DE ENTRE RÍOS*');
@@ -79,10 +142,8 @@ export function buildMeasureWhatsAppMessage(
   lines.push('');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━');
 
-  // Sender information (who is sending it)
-  const badgeInfo = sender.badgeNumber ? ` (Legajo: ${sender.badgeNumber})` : '';
-  const depInfo = sender.department ? ` - ${sender.department}` : ' - Comisaría de Minoridad y V. Familiar';
-  lines.push(`👮‍♂️ *Enviado por:* ${sender.name}${badgeInfo}${depInfo}`);
+  // Sender information - ALWAYS reflects the logged-in user with their name, badge number, and department
+  lines.push(formatOfficerSenderSignature(activeUser, 'Enviado por'));
 
   const now = new Date();
   const fechaHora =
@@ -181,10 +242,8 @@ export function buildUserCredentialsWhatsAppMessage(
   lines.push('');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━');
 
-  // Administrator who generated the credentials
-  const badgeInfo = sender.badgeNumber ? ` (Legajo: ${sender.badgeNumber})` : '';
-  const depInfo = sender.department ? ` - ${sender.department}` : ' - PER Victoria';
-  lines.push(`👮‍♂️ *Generado por:* ${sender.name}${badgeInfo}${depInfo}`);
+  // Administrator who generated the credentials (always logged-in administrator)
+  lines.push(formatOfficerSenderSignature(sender, 'Generado por'));
 
   const now = new Date();
   const fechaHora =
@@ -298,10 +357,8 @@ export function buildPersonIdentificationWhatsAppMessage(
   lines.push('');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━');
 
-  // Reporting Officer details
-  const badgeInfo = sender.badgeNumber ? ` (Legajo: ${sender.badgeNumber})` : '';
-  const depInfo = sender.department ? ` - ${sender.department}` : ' - PER Victoria';
-  lines.push(`👮‍♂️ *Informado por:* ${sender.name}${badgeInfo}${depInfo}`);
+  // Reporting Officer details (always logged-in user)
+  lines.push(formatOfficerSenderSignature(sender, 'Informado por'));
 
   const now = new Date();
   const nowStr =

@@ -63,7 +63,16 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'measures' | 'identifications' | 'files' | 'admin' | 'audit'>('measures');
 
   // Default Judicial Measures State (Stored on Web Server Database)
-  const [measures, setMeasures] = useState<JudicialMeasure[]>(DEFAULT_JUDICIAL_MEASURES);
+  const [measures, setMeasures] = useState<JudicialMeasure[]>(() => {
+    try {
+      const cached = localStorage.getItem('police_app_measures_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_JUDICIAL_MEASURES;
+  });
 
   // Measure Modal State
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
@@ -71,7 +80,16 @@ export default function App() {
   const [activeEditingMeasure, setActiveEditingMeasure] = useState<JudicialMeasure | null>(null);
 
   // Person Identification State (Stored on Web Server Database)
-  const [identifications, setIdentifications] = useState<IdentifiedPerson[]>(INITIAL_IDENTIFIED_PERSONS);
+  const [identifications, setIdentifications] = useState<IdentifiedPerson[]>(() => {
+    try {
+      const cached = localStorage.getItem('police_app_persons_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_IDENTIFIED_PERSONS;
+  });
 
   // Person Modal State
   const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
@@ -90,10 +108,24 @@ export default function App() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   // Users & RBAC State (Stored and synchronized directly with the Web Server)
-  const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    try {
+      const cached = localStorage.getItem('police_app_users_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_USERS;
+  });
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
+      const cached = sessionStorage.getItem('police_app_current_user_data') || localStorage.getItem('police_app_current_user_data');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.name) return parsed;
+      }
       const activeId = sessionStorage.getItem('police_app_active_user_id') || localStorage.getItem('police_app_active_user_id');
       if (activeId) {
         const found = INITIAL_USERS.find((u: UserProfile) => u.id === activeId);
@@ -125,6 +157,7 @@ export default function App() {
   const isSyncingRef = useRef(false);
   const lastIdentEditTimeRef = useRef<number>(0);
   const lastUsersEditTimeRef = useRef<number>(0);
+  const lastMeasureEditTimeRef = useRef<number>(0);
 
   const syncWithServer = useCallback(async (showNotice = false) => {
     if (isSyncingRef.current) return;
@@ -164,7 +197,9 @@ export default function App() {
         hasLiveResponse = true;
       }
       if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
-        setMeasures(serverMeasures);
+        if (Date.now() - lastMeasureEditTimeRef.current > 7000) {
+          setMeasures(serverMeasures);
+        }
         hasLiveResponse = true;
       }
       if (Array.isArray(serverIdents) && serverIdents.length > 0) {
@@ -257,20 +292,70 @@ export default function App() {
   // Keep currentUser in sync if updated in users list without circular triggers
   useEffect(() => {
     setCurrentUser((prevUser) => {
-      const updated = users.find((u) => u.id === prevUser.id);
+      const updated = users.find((u) => u.id === prevUser.id || (prevUser.username && u.username === prevUser.username));
       if (!updated) return prevUser;
       const hasChanged =
         updated.name !== prevUser.name ||
         updated.email !== prevUser.email ||
         updated.role !== prevUser.role ||
         updated.status !== prevUser.status ||
+        updated.badgeNumber !== prevUser.badgeNumber ||
+        updated.department !== prevUser.department ||
         JSON.stringify(updated.customPermissions) !== JSON.stringify(prevUser.customPermissions);
-      return hasChanged ? updated : prevUser;
+      if (hasChanged) {
+        try {
+          sessionStorage.setItem('police_app_current_user_data', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      }
+      return prevUser;
     });
   }, [users]);
 
   // Audit Logs State
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
+    try {
+      const cached = localStorage.getItem('police_app_audit_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_AUDIT_LOGS;
+  });
+
+  // Keep local caches updated for seamless offline/static hosting resilience
+  useEffect(() => {
+    try {
+      if (Array.isArray(measures) && measures.length > 0) {
+        localStorage.setItem('police_app_measures_cache', JSON.stringify(measures));
+      }
+    } catch (e) {}
+  }, [measures]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(identifications) && identifications.length > 0) {
+        localStorage.setItem('police_app_persons_cache', JSON.stringify(identifications));
+      }
+    } catch (e) {}
+  }, [identifications]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(users) && users.length > 0) {
+        localStorage.setItem('police_app_users_cache', JSON.stringify(users));
+      }
+    } catch (e) {}
+  }, [users]);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(auditLogs) && auditLogs.length > 0) {
+        localStorage.setItem('police_app_audit_cache', JSON.stringify(auditLogs));
+      }
+    } catch (e) {}
+  }, [auditLogs]);
 
   // Google Drive Connection State
   const [driveState, setDriveState] = useState<DriveConnectionState>({
@@ -494,6 +579,7 @@ export default function App() {
     setCurrentUser(selectedUser);
     try {
       sessionStorage.setItem('police_app_active_user_id', selectedUser.id);
+      sessionStorage.setItem('police_app_current_user_data', JSON.stringify(selectedUser));
     } catch (e) {}
     showToast(
       `Sesión cambiada a ${selectedUser.name} (Rol: ${selectedUser.role.toUpperCase()})`,
@@ -514,14 +600,18 @@ export default function App() {
     });
     setIsAuthenticated(true);
     try {
+      const userJson = JSON.stringify(user);
       sessionStorage.setItem('police_app_authenticated', 'true');
       sessionStorage.setItem('police_app_active_user_id', user.id);
+      sessionStorage.setItem('police_app_current_user_data', userJson);
       if (remember) {
         localStorage.setItem('police_app_authenticated', 'true');
         localStorage.setItem('police_app_active_user_id', user.id);
+        localStorage.setItem('police_app_current_user_data', userJson);
       } else {
         localStorage.removeItem('police_app_authenticated');
         localStorage.removeItem('police_app_active_user_id');
+        localStorage.removeItem('police_app_current_user_data');
       }
     } catch (e) {
       console.warn('Failed to save session state:', e);
@@ -535,8 +625,10 @@ export default function App() {
     try {
       sessionStorage.removeItem('police_app_authenticated');
       sessionStorage.removeItem('police_app_active_user_id');
+      sessionStorage.removeItem('police_app_current_user_data');
       localStorage.removeItem('police_app_authenticated');
       localStorage.removeItem('police_app_active_user_id');
+      localStorage.removeItem('police_app_current_user_data');
     } catch (e) {
       console.warn('Failed to clear session state:', e);
     }
@@ -661,6 +753,7 @@ export default function App() {
 
   // State update helper for Judicial Measures with direct web server persistence
   const updateMeasuresState = (newMeasures: JudicialMeasure[]) => {
+    lastMeasureEditTimeRef.current = Date.now();
     setMeasures(newMeasures);
     // Persist directly to web server database
     ApiService.saveMeasures(newMeasures).catch((err) =>
@@ -1016,6 +1109,86 @@ export default function App() {
     }
   };
 
+  // Delete Judicial Measure (Exclusive for Administrators)
+  const handleDeleteMeasure = (measure: JudicialMeasure) => {
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentPermissions.canDelete;
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo los administradores tienen permiso para eliminar medidas judiciales.', 'error');
+      addAuditLog(
+        'DELETE_MEASURE',
+        `Intento de eliminación no autorizada de medida judicial: Oficio N° ${measure.nroOficio}`,
+        measure.victima,
+        'DENIED'
+      );
+      return;
+    }
+
+    if (
+      confirm(
+        `¿Confirmas la eliminación definitiva de la medida judicial?\n\n` +
+        `• N° Oficio: ${measure.nroOficio}\n` +
+        `• Víctima: ${measure.victima}\n` +
+        `• Denunciado: ${measure.victimario}\n` +
+        `• Medida: ${measure.tipoMedida}\n` +
+        `• Juzgado: ${measure.provenienteDe}\n\n` +
+        `Esta acción es exclusiva de Administradores y quedará registrada en el sistema de auditoría.`
+      )
+    ) {
+      lastMeasureEditTimeRef.current = Date.now();
+      const updated = measures.filter((m) => m.id !== measure.id);
+      updateMeasuresState(updated);
+
+      ApiService.deleteMeasure(measure.id).catch(() => {
+        ApiService.saveMeasures(updated).catch(() => {});
+      });
+
+      addAuditLog(
+        'DELETE_MEASURE',
+        `Eliminación de medida judicial autorizada por administrador: Oficio N° ${measure.nroOficio} (${measure.tipoMedida})`,
+        measure.victima,
+        'SUCCESS'
+      );
+
+      showToast(`Medida judicial N° Oficio ${measure.nroOficio} eliminada correctamente.`, 'success');
+    }
+  };
+
+  // Bulk Delete Expired Judicial Measures (Exclusive for Administrators)
+  const handleBulkDeleteExpiredMeasures = (measuresToDelete: JudicialMeasure[]) => {
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentPermissions.canDelete;
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo los administradores pueden depurar medidas judiciales.', 'error');
+      return;
+    }
+
+    if (!measuresToDelete || measuresToDelete.length === 0) return;
+
+    if (
+      confirm(
+        `¿Confirmas la eliminación masiva de ${measuresToDelete.length} medidas judiciales vencidas?\n\n` +
+        `Esta acción depurará definitivamente estos registros del servidor policial y quedará registrada en auditoría con su firma digital.`
+      )
+    ) {
+      lastMeasureEditTimeRef.current = Date.now();
+      const idsToDelete = new Set(measuresToDelete.map((m) => m.id));
+      const updated = measures.filter((m) => !idsToDelete.has(m.id));
+      updateMeasuresState(updated);
+
+      Promise.all(measuresToDelete.map((m) => ApiService.deleteMeasure(m.id))).catch(() => {
+        ApiService.saveMeasures(updated).catch(() => {});
+      });
+
+      addAuditLog(
+        'DELETE_MEASURE',
+        `Depuración masiva de ${measuresToDelete.length} medidas judiciales vencidas autorizada por el administrador ${currentUser.name}`,
+        `Cantidad: ${measuresToDelete.length} registros`,
+        'SUCCESS'
+      );
+
+      showToast(`${measuresToDelete.length} medidas vencidas han sido eliminadas correctamente del sistema.`, 'success');
+    }
+  };
+
   // Filter & Search Logic
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
@@ -1196,6 +1369,8 @@ export default function App() {
             onDownloadPdf={handleDownloadMeasurePdf}
             onOpenCreate={handleOpenCreateMeasure}
             onOpenEdit={handleOpenEditMeasure}
+            onDeleteMeasure={handleDeleteMeasure}
+            onBulkDeleteExpired={handleBulkDeleteExpiredMeasures}
           />
         )}
 
@@ -1306,6 +1481,11 @@ export default function App() {
             }
             onAddAuditLog={addAuditLog}
             initialSubTab={currentTab === 'audit' ? 'audit' : 'users'}
+            measures={measures}
+            identifications={identifications}
+            onRestoreMeasures={setMeasures}
+            onRestoreIdentifications={setIdentifications}
+            onRestoreAuditLogs={setAuditLogs}
           />
         )}
 

@@ -6,7 +6,7 @@
     "name": "SARGENTO NAVONI LEONEL",
     "email": "leonel.navoni@gmail.com",
     "badgeNumber": "30557",
-    "department": "COMISARIA DEL MENOR Y VIOLENCIA FAMILIAR",
+    "department": "COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR",
     "role": "superadmin",
     "status": "active",
     "createdAt": "2026-09-07T13:10:02.829Z",
@@ -14,14 +14,16 @@
   },
   {
     "id": "usr-1",
-    "name": "Leonel Navoni",
+    "username": "admin",
+    "password": "almorial1",
+    "name": "SARGENTO NAVONI LEONEL",
     "email": "leonel.navoni@gmail.com",
+    "badgeNumber": "30557",
+    "department": "COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR",
     "role": "superadmin",
     "status": "active",
     "createdAt": "2026-01-10T08:00:00Z",
-    "lastLogin": "2026-09-08T23:40:48.027Z",
-    "username": "admin",
-    "password": "almorial1"
+    "lastLogin": "2026-09-08T23:40:48.027Z"
   },
   {
     "id": "usr-3",

@@ -129,7 +129,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 <span className="text-slate-400 block text-[11px]">Remitente (Quién envía):</span>
                 <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                   <User className="w-3.5 h-3.5" />
-                  {currentUser.name} {currentUser.badgeNumber ? `(Legajo ${currentUser.badgeNumber})` : ''}
+                  {(currentUser.name || 'Personal Policial').toUpperCase()} {currentUser.badgeNumber ? `(Legajo: ${currentUser.badgeNumber.replace(/^LP-?/i, '')})` : ''} - {currentUser.department ? currentUser.department.toUpperCase() : 'COMISARIA DE MINORIDAD Y VIOLENCIA FAMILIAR'}
                 </span>
               </div>
             </div>

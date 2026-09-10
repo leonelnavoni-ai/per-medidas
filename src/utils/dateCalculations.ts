@@ -83,3 +83,108 @@ export function formatFriendlySpanishDate(date: Date): string {
     return formatToDDMMYYYY(date);
   }
 }
+
+export interface MeasureExpirationInfo {
+  status: 'vencida' | 'por_vencer' | 'vigente' | 'duracion_causa' | 'sin_fecha';
+  daysDiff: number | null; // e.g. -10 for expired 10 days ago, +3 for expiring in 3 days
+  badgeLabel: string;
+  badgeClass: string;
+  isExpired: boolean;
+  isExpiringSoon: boolean; // within 7 days
+  formattedExpiryDate: string;
+}
+
+/**
+ * Evaluates the expiration status of a judicial measure
+ */
+export function getMeasureExpirationInfo(fechaHasta?: string | null): MeasureExpirationInfo {
+  if (!fechaHasta || !fechaHasta.trim()) {
+    return {
+      status: 'sin_fecha',
+      daysDiff: null,
+      badgeLabel: 'Sin fecha límite',
+      badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
+      isExpired: false,
+      isExpiringSoon: false,
+      formattedExpiryDate: 'No especificada',
+    };
+  }
+
+  const upper = fechaHasta.toUpperCase().trim();
+  if (
+    upper.includes('DURACION') ||
+    upper.includes('FINALIZAR') ||
+    upper.includes('ACTUACIONES') ||
+    upper.includes('ETI') ||
+    upper.includes('CAUSA')
+  ) {
+    return {
+      status: 'duracion_causa',
+      daysDiff: null,
+      badgeLabel: 'Duración de Causa',
+      badgeClass: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
+      isExpired: false,
+      isExpiringSoon: false,
+      formattedExpiryDate: fechaHasta,
+    };
+  }
+
+  const parsed = parseDateFlexible(fechaHasta);
+  if (!parsed) {
+    return {
+      status: 'sin_fecha',
+      daysDiff: null,
+      badgeLabel: fechaHasta.length > 20 ? `${fechaHasta.substring(0, 18)}...` : fechaHasta,
+      badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
+      isExpired: false,
+      isExpiringSoon: false,
+      formattedExpiryDate: fechaHasta,
+    };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const formattedExpiry = formatToDDMMYYYY(target);
+
+  if (diffDays < 0) {
+    const absDays = Math.abs(diffDays);
+    return {
+      status: 'vencida',
+      daysDiff: diffDays,
+      badgeLabel: absDays === 1 ? 'Venció ayer' : `Vencida (${absDays}d)`,
+      badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-200 border border-rose-300 dark:border-rose-800 font-bold',
+      isExpired: true,
+      isExpiringSoon: false,
+      formattedExpiryDate: formattedExpiry,
+    };
+  }
+
+  if (diffDays <= 7) {
+    let label = `Por vencer (${diffDays}d)`;
+    if (diffDays === 0) label = '¡Vence HOY!';
+    else if (diffDays === 1) label = '¡Vence MAÑANA!';
+
+    return {
+      status: 'por_vencer',
+      daysDiff: diffDays,
+      badgeLabel: label,
+      badgeClass: 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border-2 border-amber-400 dark:border-amber-500 font-bold shadow-sm',
+      isExpired: false,
+      isExpiringSoon: true,
+      formattedExpiryDate: formattedExpiry,
+    };
+  }
+
+  return {
+    status: 'vigente',
+    daysDiff: diffDays,
+    badgeLabel: `Vigente (${diffDays}d)`,
+    badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-medium',
+    isExpired: false,
+    isExpiringSoon: false,
+    formattedExpiryDate: formattedExpiry,
+  };
+}
+
