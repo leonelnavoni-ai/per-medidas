@@ -13,13 +13,11 @@ import {
   UploadCloud,
   FileText,
   Trash2,
-  HardDrive,
-  FolderPlus,
+  Server,
   Eye,
   CheckCircle2,
   Loader2,
   RefreshCw,
-  ExternalLink,
   Clock,
   CalendarDays,
   CalendarCheck,
@@ -30,7 +28,6 @@ import {
 import { JudicialMeasure, DriveConnectionState, UserProfile } from '../types';
 import { WhatsAppShareModal } from './WhatsAppShareModal';
 import { formatBytes } from '../utils/formatters';
-import { DEFAULT_DRIVE_FOLDER_ID, DEFAULT_DRIVE_FOLDER_URL } from '../data/initialData';
 import {
   parseDateFlexible,
   formatToDDMMYYYY,
@@ -103,9 +100,8 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
   const [showManualDateOverride, setShowManualDateOverride] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // PDF Upload & Google Drive states
+  // PDF Upload states (Server-side storage)
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [driveFolderName, setDriveFolderName] = useState<string>('Medidas Judiciales');
   const [removeExistingPdf, setRemoveExistingPdf] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -137,7 +133,6 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
         setDaysCount(90);
       }
 
-      setDriveFolderName(initialMeasure.driveFolder || 'Medidas Judiciales');
       setAttachedFile(null);
       setRemoveExistingPdf(false);
       setShowManualDateOverride(false);
@@ -165,7 +160,6 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
         observaciones: '',
       });
       setIsDuracionCausa(false);
-      setDriveFolderName('Medidas Judiciales');
       setAttachedFile(null);
       setRemoveExistingPdf(false);
       setShowManualDateOverride(false);
@@ -358,10 +352,9 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
         observaciones: formData.observaciones?.trim(),
         isOfficialRegistry: true,
         lastUpdated: new Date().toLocaleString(),
-        driveFolder: driveFolderName.trim() || 'Medidas Judiciales',
       };
 
-      await onSave(measureToSave, attachedFile, driveFolderName.trim() || 'Medidas Judiciales', removeExistingPdf);
+      await onSave(measureToSave, attachedFile, undefined, removeExistingPdf);
       onClose();
     } catch (err: any) {
       console.error('Error al guardar medida judicial:', err);
@@ -391,8 +384,8 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
               </h2>
               <p className="text-xs text-slate-400">
                 {mode === 'create' 
-                  ? 'Registra una nueva medida cautelar y carga su oficio PDF a Google Drive'
-                  : 'Modifica los datos del oficio y actualiza o adjunta el documento PDF a Google Drive'}
+                  ? 'Registra una nueva medida cautelar y guarda su oficio PDF en el servidor'
+                  : 'Modifica los datos del oficio y actualiza o adjunta el documento PDF en el servidor'}
               </p>
             </div>
           </div>
@@ -823,61 +816,43 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
           </div>
 
           {/* ========================================================================= */}
-          {/* SECTION: CARGAR PDF A GOOGLE DRIVE (NUEVA OPCIÓN DE ACTUALIZAR DATOS) */}
+          {/* SECTION: CARGAR PDF AL SERVIDOR POLICIAL */}
           {/* ========================================================================= */}
           <div className="p-4 bg-gradient-to-br from-blue-50/70 via-slate-50 to-indigo-50/40 dark:from-slate-800/80 dark:via-slate-850 dark:to-blue-950/30 rounded-2xl border border-blue-200 dark:border-blue-800/60 space-y-3">
             
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <HardDrive className="w-4 h-4" />
+                  <Server className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <span>Cargar Oficio o Resolución en PDF</span>
-                    <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700/50">
-                      Google Drive
+                    <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      Servidor Policial
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    El archivo se cargará en Google Drive en la carpeta seleccionada para visualizarlo y descargarlo en las búsquedas.
+                    El archivo se guardará directamente en el servidor seguro de la Comisaría para su visualización y descarga en las búsquedas.
                   </p>
                 </div>
               </div>
 
               {/* Status badge */}
-              {driveState?.isConnected ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                  Drive Conectado
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
-                  Modo Local & Drive
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                Almacenamiento en Servidor
+              </span>
             </div>
 
-            {/* Folder Name & Official Destination in Google Drive */}
-            <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl space-y-1.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                <div className="flex items-center gap-1.5 text-blue-900 dark:text-blue-200 font-semibold">
-                  <FolderPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  <span>Carpeta destino Google Drive:</span>
-                </div>
-                <a
-                  href={DEFAULT_DRIVE_FOLDER_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-mono text-[10px] bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 hover:underline"
-                  title="Abrir carpeta oficial en Google Drive"
-                >
-                  <span className="truncate max-w-[180px] sm:max-w-[220px]">ID: {DEFAULT_DRIVE_FOLDER_ID}</span>
-                  <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-                </a>
+            {/* Official Storage Destination in Server */}
+            <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl space-y-1">
+              <div className="flex items-center gap-1.5 text-blue-900 dark:text-blue-200 font-semibold text-[11px]">
+                <Server className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Almacenamiento exclusivo en Servidor de la Comisaría:</span>
               </div>
               <p className="text-[10px] text-blue-700/80 dark:text-blue-300/80">
-                Los archivos PDF subidos se guardarán automáticamente en esta carpeta de Google Drive para su consulta y descarga en las búsquedas.
+                Los archivos PDF se guardan de forma permanente y confidencial en el disco local del servidor (/uploads/pdfs). No se utilizan carpetas externas ni Google Drive.
               </p>
             </div>
 
@@ -906,7 +881,7 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
                       {initialMeasure?.pdfFileName || `Oficio_${initialMeasure?.nroOficio}.pdf`}
                     </p>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                      <span>Cargado en: <strong>{initialMeasure?.driveFolder || 'Medidas Judiciales'}</strong></span>
+                      <span>Alojado en: <strong>Servidor Policial</strong></span>
                       {initialMeasure?.pdfFileSize && (
                         <span>• {formatBytes(initialMeasure.pdfFileSize)}</span>
                       )}
@@ -978,7 +953,7 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
                       </span>
                     </div>
                     <p className="text-[10px] text-emerald-800 dark:text-emerald-300">
-                      {formatBytes(attachedFile.size)} • Se cargará en Google Drive / {driveFolderName}
+                      {formatBytes(attachedFile.size)} • Se guardará en el servidor policial
                     </p>
                   </div>
                 </div>
@@ -1059,7 +1034,7 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
 
           <div className="pt-1">
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              * Al guardar, los datos se registrarán en la base de datos oficial. Si adjuntaste un PDF, se subirá a Google Drive en la carpeta indicada y estará disponible para visualización y descarga directa desde el buscador.
+              * Al guardar, los datos se registrarán en la base de datos oficial. Si adjuntaste un PDF, se guardará en el servidor local seguro de la Comisaría y estará disponible para visualización y descarga directa.
             </p>
           </div>
 
@@ -1096,7 +1071,7 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
                 {isSaving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Guardando y cargando a Google Drive...</span>
+                    <span>Guardando en el servidor...</span>
                   </>
                 ) : mode === 'create' ? (
                   <>

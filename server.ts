@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_USERS, INITIAL_AUDIT_LOGS } from './src/data/initialData';
 import { DEFAULT_JUDICIAL_MEASURES } from './src/data/defaultMeasures';
@@ -935,6 +936,154 @@ async function startServer() {
   app.post('/api/backup/restore', handleBackupRestore);
   app.post('/api/backup', handleBackupRestore);
   app.post('/api/backup.php', handleBackupRestore);
+
+  // 11. Document OCR & Smart Extraction (DNI / Licencia de Conducir) via Gemini
+  let geminiAiClient: GoogleGenAI | null = null;
+  function getGenAI(): GoogleGenAI | null {
+    if (!process.env.GEMINI_API_KEY) {
+      return null;
+    }
+    if (!geminiAiClient) {
+      geminiAiClient = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+    }
+    return geminiAiClient;
+  }
+
+  app.post('/api/scan-document', async (req: express.Request, res: express.Response) => {
+    try {
+      const { imageBase64, mimeType = 'image/jpeg' } = req.body;
+      if (!imageBase64 || typeof imageBase64 !== 'string') {
+        res.status(400).json({ success: false, error: 'Se requiere la imagen en formato base64' });
+        return;
+      }
+
+      const cleanBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+      const ai = getGenAI();
+
+      if (!ai) {
+        res.status(503).json({
+          success: false,
+          error: 'Servicio de reconocimiento OCR por IA no configurado (GEMINI_API_KEY no disponible)',
+        });
+        return;
+      }
+
+      const promptText = `Sos un perito documental y policial de Entre Ríos, Argentina.
+Analizá minuciosamente la fotografía adjunta de un documento de identidad argentino o licencia de conducir.
+Puede tratarse de:
+1. DNI argentino tarjeta (frente o dorso, fondo celeste o tarjeta vigente).
+2. Licencia Nacional de Conducir (frente o dorso).
+3. Cédula de identidad o pasaporte.
+
+Extraé con la mayor fidelidad y exactitud los datos solicitados:
+- tipoDocumento: 'DNI' o 'LICENCIA' u 'OTRO'
+- apellidoNombre: Apellido y nombres completos en mayúsculas (ej: 'PEREZ JUAN CARLOS')
+- apellido: Apellido de la persona
+- nombre: Nombres de la persona
+- dni: Número de documento (solo dígitos numéricos, ej: '34567890')
+- fechaNacimiento: Fecha de nacimiento en formato DD/MM/AAAA si figura en el documento
+- edad: Edad estimada en años calculada a partir de la fecha de nacimiento (o 0 si no se puede)
+- sexo: 'M', 'F' o 'X' si figura
+- nacionalidad: Nacionalidad (ej: 'Argentina')
+- domicilio: Domicilio completo que figura en el plástico (calle, número, barrio, localidad)
+- claseLicencia: Si es una licencia de conducir, clases de vehículos autorizados (ej: 'B.1', 'A.1.2')
+- vencimiento: Fecha de vigencia/vencimiento en formato DD/MM/AAAA si figura
+- confianza: 'ALTA', 'MEDIA' o 'BAJA'`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'image/jpeg',
+                data: cleanBase64,
+              },
+            },
+            {
+              text: promptText,
+            },
+          ],
+        },
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              tipoDocumento: {
+                type: Type.STRING,
+                description: "Tipo: 'DNI', 'LICENCIA' o 'OTRO'",
+              },
+              apellidoNombre: {
+                type: Type.STRING,
+                description: 'Apellido y Nombres completos en mayúsculas',
+              },
+              apellido: {
+                type: Type.STRING,
+              },
+              nombre: {
+                type: Type.STRING,
+              },
+              dni: {
+                type: Type.STRING,
+                description: 'Número de documento de identidad (solo números)',
+              },
+              fechaNacimiento: {
+                type: Type.STRING,
+                description: 'Fecha de nacimiento DD/MM/AAAA o vacía',
+              },
+              edad: {
+                type: Type.INTEGER,
+                description: 'Edad en años calculada',
+              },
+              sexo: {
+                type: Type.STRING,
+              },
+              nacionalidad: {
+                type: Type.STRING,
+              },
+              domicilio: {
+                type: Type.STRING,
+              },
+              claseLicencia: {
+                type: Type.STRING,
+              },
+              vencimiento: {
+                type: Type.STRING,
+              },
+              confianza: {
+                type: Type.STRING,
+              },
+            },
+            required: ['tipoDocumento', 'apellidoNombre', 'dni'],
+          },
+        },
+      });
+
+      const responseText = response.text?.trim() || '{}';
+      const parsedData = JSON.parse(responseText);
+
+      console.log(`[Scan Document] Documento reconocido exitosamente: ${parsedData.apellidoNombre || 'Desconocido'} (DNI: ${parsedData.dni || 'S/D'})`);
+
+      res.json({
+        success: true,
+        data: parsedData,
+      });
+    } catch (err: any) {
+      console.error('[Scan Document] Error en análisis con Gemini:', err);
+      res.status(500).json({
+        success: false,
+        error: err.message || 'Error al procesar la imagen del documento',
+      });
+    }
+  });
 
   // ==========================================
   // VITE & STATIC FILES SERVING

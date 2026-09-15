@@ -924,14 +924,6 @@ export default function App() {
             downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
           }
         }
-      } else if (measure.hasCustomPdf && measure.driveFileId && driveState.isConnected && driveState.accessToken) {
-        try {
-          blob = await DriveService.downloadPdfBlob(driveState.accessToken, measure.driveFileId);
-          downloadFileName = measure.pdfFileName || `Oficio_${safeOficio}.pdf`;
-        } catch {
-          blob = generateJudicialMeasurePdfBlob(measure);
-          downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
-        }
       } else {
         blob = generateJudicialMeasurePdfBlob(measure);
         downloadFileName = `Oficio_Judicial_${safeOficio}.pdf`;
@@ -948,7 +940,7 @@ export default function App() {
 
       addAuditLog(
         'DOWNLOAD',
-        `Descarga de Oficio Judicial N° ${measure.nroOficio} autorizada y completada${measure.hasCustomPdf ? ' (Archivo original Google Drive)' : ''}`,
+        `Descarga de Oficio Judicial N° ${measure.nroOficio} autorizada y completada${measure.hasCustomPdf ? ' (Archivo original del servidor)' : ''}`,
         downloadFileName,
         'SUCCESS'
       );
@@ -1022,36 +1014,11 @@ export default function App() {
         finalMeasure.pdfBlobUrl = serverPdfUrl || localBlobUrl;
         finalMeasure.pdfFileName = attachedFile.name;
         finalMeasure.pdfFileSize = attachedFile.size;
-        finalMeasure.driveFolder = targetFolder;
         finalMeasure.uploadedAt = new Date().toISOString();
 
-        // If Google Drive is authenticated, upload directly to the specified folder in Google Drive
-        if (driveState.isConnected && driveState.accessToken) {
-          try {
-            showToast(`Cargando PDF a Google Drive en carpeta oficial...`, 'info');
-            
-            // Upload directly to target folder in Google Drive (Default ID: 1vsKodJ1LgaFSbejTiwcilEaHFcmnLmWe)
-            const targetFolderId = driveState.uploadFolderId || DEFAULT_DRIVE_FOLDER_ID;
-
-            const uploadResult = await DriveService.uploadPdfFile(
-              driveState.accessToken,
-              attachedFile,
-              targetFolderId
-            );
-
-            finalMeasure.driveFileId = uploadResult.id;
-            finalMeasure.driveWebViewLink = uploadResult.webViewLink;
-
-            showToast(`PDF guardado con éxito en Google Drive`, 'success');
-          } catch (driveErr: any) {
-            console.warn('Google Drive direct upload warning:', driveErr);
-            showToast(`PDF guardado localmente (Drive: ${driveErr.message || 'requiere reconexión'})`, 'info');
-          }
-        }
-
-        // Also register in files list so it appears in the Drive Files Explorer
-        const driveFileRecord: DriveFile = {
-          id: finalMeasure.driveFileId || `measure-pdf-${finalMeasure.id}`,
+        // Register in files list for the system document explorer
+        const localFileRecord: DriveFile = {
+          id: `measure-pdf-${finalMeasure.id}`,
           name: attachedFile.name,
           mimeType: 'application/pdf',
           size: attachedFile.size,
@@ -1062,18 +1029,17 @@ export default function App() {
             'Medida Judicial',
             `Oficio ${finalMeasure.nroOficio}`,
             finalMeasure.victima,
-            targetFolder
+            'Servidor Policial'
           ],
-          isHostedLocal: !finalMeasure.driveFileId,
+          isHostedLocal: true,
           serverPdfUrl,
           localBlobUrl,
-          description: `Oficio Judicial N° ${finalMeasure.nroOficio}. Beneficiario/a: ${finalMeasure.victima}. Denunciado: ${finalMeasure.victimario}. Organismo: ${finalMeasure.provenienteDe}. Carpeta en Drive: ${targetFolder}`,
+          description: `Oficio Judicial N° ${finalMeasure.nroOficio}. Beneficiario/a: ${finalMeasure.victima}. Denunciado: ${finalMeasure.victimario}. Organismo: ${finalMeasure.provenienteDe}. Almacenado en servidor local (/uploads/pdfs).`,
           uploadedBy: currentUser.name,
-          folderPath: targetFolder,
-          driveId: finalMeasure.driveFileId,
+          folderPath: 'Servidor Policial / Medidas',
         };
 
-        setFiles((prev) => [driveFileRecord, ...prev.filter((f) => f.id !== driveFileRecord.id)]);
+        setFiles((prev) => [localFileRecord, ...prev.filter((f) => f.id !== localFileRecord.id)]);
       } catch (err: any) {
         console.error('Error processing PDF upload:', err);
         showToast(`Error al procesar el archivo PDF: ${err.message}`, 'error');
@@ -1085,12 +1051,12 @@ export default function App() {
       updateMeasuresState(updated);
       addAuditLog(
         'CREATE_MEASURE',
-        `Nueva medida judicial registrada para víctima ${finalMeasure.victima} (Oficio ${finalMeasure.nroOficio})${finalMeasure.hasCustomPdf ? ` con PDF en Google Drive carpeta "${finalMeasure.driveFolder}"` : ''}`,
+        `Nueva medida judicial registrada para víctima ${finalMeasure.victima} (Oficio ${finalMeasure.nroOficio})${finalMeasure.hasCustomPdf ? ' con Oficio PDF guardado en el servidor' : ''}`,
         `Oficio ${finalMeasure.nroOficio}`,
         'SUCCESS'
       );
       showToast(
-        `Medida judicial registrada exitosamente (Oficio ${finalMeasure.nroOficio})${finalMeasure.hasCustomPdf ? ' y PDF vinculado en Drive' : ''}`,
+        `Medida judicial registrada exitosamente (Oficio ${finalMeasure.nroOficio})${finalMeasure.hasCustomPdf ? ' y PDF alojado en servidor' : ''}`,
         'success'
       );
     } else {
@@ -1098,12 +1064,12 @@ export default function App() {
       updateMeasuresState(updated);
       addAuditLog(
         'UPDATE_MEASURE',
-        `Medida judicial actualizada para víctima ${finalMeasure.victima} (Oficio ${finalMeasure.nroOficio})${finalMeasure.hasCustomPdf ? ` con PDF en Google Drive carpeta "${finalMeasure.driveFolder}"` : ''}`,
+        `Medida judicial actualizada para víctima ${finalMeasure.victima} (Oficio ${finalMeasure.nroOficio})${finalMeasure.hasCustomPdf ? ' con Oficio PDF guardado en el servidor' : ''}`,
         `Oficio ${finalMeasure.nroOficio}`,
         'SUCCESS'
       );
       showToast(
-        `Medida judicial N° ${finalMeasure.nroOficio} actualizada correctamente${finalMeasure.hasCustomPdf ? ' (PDF guardado en Drive)' : ''}`,
+        `Medida judicial N° ${finalMeasure.nroOficio} actualizada correctamente${finalMeasure.hasCustomPdf ? ' (PDF guardado en el servidor)' : ''}`,
         'success'
       );
     }
@@ -1567,7 +1533,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>Drive PDF Explorer • Aplicación Web Descargable (PWA) con Control RBAC y Google Drive</p>
+          <p>Sistema Policial de Medidas Judiciales • Comisaría de Minoridad y Violencia Familiar</p>
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1 text-emerald-400">
               <CheckCircle2 className="w-3.5 h-3.5" />

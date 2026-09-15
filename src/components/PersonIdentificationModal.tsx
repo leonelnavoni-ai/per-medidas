@@ -11,8 +11,14 @@ import {
   MessageCircle,
   Save,
   CheckCircle2,
+  Camera,
+  Sparkles,
+  Image as ImageIcon,
+  Trash2,
 } from 'lucide-react';
 import { IdentifiedPerson, JudicialMeasure, LegalStatusType, UserProfile } from '../types';
+import { DocumentScannerModal } from './DocumentScannerModal';
+import { ScannedDocumentResult } from '../utils/documentScanner';
 
 interface PersonIdentificationModalProps {
   isOpen: boolean;
@@ -51,6 +57,15 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
   const [sendWhatsAppDirectly, setSendWhatsAppDirectly] = useState(false);
   const [fechaHora, setFechaHora] = useState('');
 
+  // Scanner and Photo states
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'document' | 'person'>('document');
+  const [fotoBase64, setFotoBase64] = useState<string | undefined>(undefined);
+  const [fotoDocumentoBase64, setFotoDocumentoBase64] = useState<string | undefined>(undefined);
+  const [tipoDocumentoIdentificado, setTipoDocumentoIdentificado] = useState<'DNI' | 'LICENCIA' | 'OTRO' | undefined>(undefined);
+  const [claseLicencia, setClaseLicencia] = useState<string | undefined>(undefined);
+  const [scanSuccessBanner, setScanSuccessBanner] = useState<string | null>(null);
+
   // Pre-fill form when opening or editing
   useEffect(() => {
     if (initialPerson && mode === 'edit') {
@@ -68,6 +83,11 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
       setObservaciones(initialPerson.observaciones || '');
       setVehiculo(initialPerson.vehiculo || '');
       setFechaHora(initialPerson.fechaHora || new Date().toISOString());
+      setFotoBase64(initialPerson.fotoBase64);
+      setFotoDocumentoBase64(initialPerson.fotoDocumentoBase64);
+      setTipoDocumentoIdentificado(initialPerson.tipoDocumentoIdentificado);
+      setClaseLicencia(initialPerson.claseLicencia);
+      setScanSuccessBanner(null);
 
       const standardMotivos = [
         'Control de rutina en vía pública',
@@ -103,6 +123,11 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
       setObservaciones('');
       setVehiculo('');
       setSendWhatsAppDirectly(false);
+      setFotoBase64(undefined);
+      setFotoDocumentoBase64(undefined);
+      setTipoDocumentoIdentificado(undefined);
+      setClaseLicencia(undefined);
+      setScanSuccessBanner(null);
 
       // Current local datetime in YYYY-MM-DDTHH:mm format
       const now = new Date();
@@ -125,6 +150,62 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
       return victimaMatch || victimarioMatch;
     });
   }, [apellidoNombre, dni, measures]);
+
+  // Handle scanned result from DocumentScannerModal
+  const handleApplyScannedData = (
+    result: ScannedDocumentResult,
+    documentPhoto?: string,
+    personPhoto?: string
+  ) => {
+    if (result.apellidoNombre) {
+      setApellidoNombre(result.apellidoNombre);
+    }
+    if (result.dni) {
+      setDni(result.dni);
+    }
+    if (result.edad) {
+      setEdad(String(result.edad));
+    }
+    if (result.nacionalidad) {
+      setNacionalidad(result.nacionalidad);
+    }
+    if (result.domicilio) {
+      setDomicilio(result.domicilio);
+    }
+    if (result.claseLicencia) {
+      setClaseLicencia(result.claseLicencia);
+    }
+    if (result.tipoDocumento) {
+      setTipoDocumentoIdentificado(result.tipoDocumento);
+    }
+    if (documentPhoto) {
+      setFotoDocumentoBase64(documentPhoto);
+    }
+    if (personPhoto) {
+      setFotoBase64(personPhoto);
+    }
+
+    // Check if new person matches judicial measures and warn
+    const cleanName = (result.apellidoNombre || '').trim().toLowerCase();
+    const hasJudicialAlert = measures.some(
+      (m) =>
+        (cleanName && m.victima.toLowerCase().includes(cleanName)) ||
+        (cleanName && m.victimario.toLowerCase().includes(cleanName))
+    );
+
+    if (hasJudicialAlert) {
+      setEstadoLegal('Con medida cautelar');
+      setScanSuccessBanner(
+        `⚠️ Documento reconocido: ${result.apellidoNombre || 'Ciudadano'}. ¡ALERTA: Se detectaron medidas cautelares vigentes!`
+      );
+    } else {
+      setScanSuccessBanner(
+        `✓ Datos cargados exitosamente desde ${result.tipoDocumento || 'Documento'} (${
+          result.metodo === 'CODIGO_BARRAS_PDF417' ? 'Código PDF417 RENAPER' : 'OCR Inteligente'
+        })`
+      );
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -154,6 +235,10 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
       estadoLegal,
       observaciones: observaciones.trim() || undefined,
       vehiculo: vehiculo.trim() || undefined,
+      fotoBase64,
+      fotoDocumentoBase64,
+      tipoDocumentoIdentificado,
+      claseLicencia,
       createdAt: initialPerson && mode === 'edit' ? initialPerson.createdAt : new Date().toISOString(),
       createdBy: initialPerson && mode === 'edit' ? initialPerson.createdBy : currentUser.name,
     };
@@ -163,35 +248,136 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in overflow-y-auto">
-      <div className="w-full max-w-3xl bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto">
-        {/* Header */}
-        <div className="px-5 py-4 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-              <UserCheck className="w-5 h-5" />
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in overflow-y-auto">
+        <div className="w-full max-w-3xl bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto">
+          {/* Header */}
+          <div className="px-5 py-4 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {mode === 'create'
+                    ? 'Registrar Identificación de Persona'
+                    : 'Modificar Datos de Persona Identificada'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Policía de Entre Ríos • Control y Verificación de Antecedentes
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-bold text-white">
-                {mode === 'create'
-                  ? 'Registrar Identificación de Persona'
-                  : 'Modificar Datos de Persona Identificada'}
-              </h3>
-              <p className="text-xs text-slate-400">
-                Policía de Entre Ríos • Control y Verificación de Antecedentes
-              </p>
-            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* Form Form */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm">
+            {/* Success notification banner after scan */}
+            {scanSuccessBanner && (
+              <div className="p-3 rounded-xl bg-blue-950/80 border border-blue-600/80 text-blue-200 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-semibold">{scanSuccessBanner}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScanSuccessBanner(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Smart Scanner Hero Action Bar */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/70 via-slate-900 to-indigo-950/70 border border-blue-500/40 shadow-lg space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-400 shrink-0">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                      <span>Escanear DNI o Licencia con Cámara</span>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-mono border border-blue-500/30">
+                        Código PDF417 • OCR IA
+                      </span>
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-slate-300">
+                      Enfoque el documento para extraer DNI, nombre y domicilio automáticamente y capturar foto.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScannerMode('document');
+                      setIsScannerOpen(true);
+                    }}
+                    className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-900/40 transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <span>Escanear Documento</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScannerMode('person');
+                      setIsScannerOpen(true);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    title="Tomar foto del rostro del ciudadano"
+                  >
+                    <Camera className="w-4 h-4 text-indigo-300" />
+                    <span>Foto Rostro</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Photos attached indicators */}
+              {(fotoDocumentoBase64 || fotoBase64) && (
+                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-3">
+                  <span className="text-[11px] text-slate-400 font-semibold">Fotografías adjuntas:</span>
+                  {fotoDocumentoBase64 && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-blue-300">
+                      <img src={fotoDocumentoBase64} alt="Doc" className="w-5 h-5 rounded object-cover" />
+                      <span>Doc: {tipoDocumentoIdentificado || 'DNI'}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFotoDocumentoBase64(undefined)}
+                        className="text-slate-500 hover:text-rose-400 ml-1 cursor-pointer"
+                        title="Quitar foto de documento"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  {fotoBase64 && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-indigo-300">
+                      <img src={fotoBase64} alt="Persona" className="w-5 h-5 rounded object-cover" />
+                      <span>Rostro ciudadano</span>
+                      <button
+                        type="button"
+                        onClick={() => setFotoBase64(undefined)}
+                        className="text-slate-500 hover:text-rose-400 ml-1 cursor-pointer"
+                        title="Quitar foto de persona"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           {/* Live Cross-Check Banner if matching Judicial Measures found */}
           {matchingMeasures.length > 0 && (
             <div className="p-3.5 rounded-xl bg-amber-950/60 border border-amber-600/70 text-amber-200 animate-in slide-in-from-top-2 space-y-1.5">
@@ -525,5 +711,19 @@ export const PersonIdentificationModal: React.FC<PersonIdentificationModalProps>
         </form>
       </div>
     </div>
+
+    {/* Scanner & Camera Modal */}
+    {isScannerOpen && (
+      <DocumentScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onApplyData={handleApplyScannedData}
+        measures={measures}
+        initialMode={scannerMode}
+        existingDocumentPhoto={fotoDocumentoBase64}
+        existingPersonPhoto={fotoBase64}
+      />
+    )}
+  </>
   );
 };

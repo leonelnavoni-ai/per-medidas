@@ -37,6 +37,7 @@ import {
   Database,
   UploadCloud,
   ShieldCheck,
+  Server,
 } from 'lucide-react';
 import { UserWhatsAppModal } from './UserWhatsAppModal';
 import { ApiService } from '../services/apiService';
@@ -64,7 +65,7 @@ interface AdminPanelProps {
   onDisconnectDrive: () => void;
   onUpdateDriveConfig: (searchFolderId: string, uploadFolderId: string) => void;
   onAddAuditLog: (action: any, details: string, targetFile?: string, status?: 'SUCCESS' | 'DENIED') => void;
-  initialSubTab?: 'users' | 'queries' | 'audit' | 'drive' | 'backup';
+  initialSubTab?: 'users' | 'queries' | 'audit' | 'storage' | 'drive' | 'backup';
   measures?: JudicialMeasure[];
   identifications?: IdentifiedPerson[];
   onRestoreMeasures?: (measures: JudicialMeasure[]) => void;
@@ -90,11 +91,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRestoreIdentifications,
   onRestoreAuditLogs,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'drive' | 'backup'>(initialSubTab || 'users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'storage' | 'backup'>(
+    initialSubTab === 'drive' ? 'storage' : ((initialSubTab as any) || 'users')
+  );
 
   React.useEffect(() => {
     if (initialSubTab) {
-      setActiveSubTab(initialSubTab);
+      setActiveSubTab(initialSubTab === 'drive' ? 'storage' : (initialSubTab as any));
     }
   }, [initialSubTab]);
 
@@ -875,15 +878,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('drive')}
+            id="tab-almacenamiento-servidor"
+            onClick={() => setActiveSubTab('storage')}
             className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeSubTab === 'drive'
+              activeSubTab === 'storage'
                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
             }`}
           >
-            <HardDrive className="w-3.5 h-3.5" />
-            <span>Base Google Drive</span>
+            <Server className="w-3.5 h-3.5" />
+            <span>Almacenamiento Servidor</span>
           </button>
 
           {/* SUBTAB: COPIA DE SEGURIDAD */}
@@ -1949,163 +1953,100 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* TAB 3: CONFIGURACIÓN BASE GOOGLE DRIVE */}
-      {activeSubTab === 'drive' && (
+      {/* TAB 3: CONFIGURACIÓN DE ALMACENAMIENTO EN SERVIDOR POLICIAL */}
+      {(activeSubTab === 'storage' || activeSubTab === 'drive') && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Connection Status Card */}
+          {/* Main Server Storage Card */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <HardDrive className="w-5 h-5 text-blue-500" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Estado de la Base de Datos Google Drive
-                </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Server className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Almacenamiento Local en Servidor Policial
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Los archivos PDF de los oficios se guardan exclusivamente en el disco del servidor interno
+                  </p>
+                </div>
               </div>
-              <span
-                className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
-                  driveState.isConnected
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                }`}
-              >
-                {driveState.isConnected ? (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Conexión Activa (Google Drive API v3)</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Modo Desconectado (Repositorio Local)</span>
-                  </>
-                )}
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Servidor Policial Activo (Sin Google Drive)</span>
               </span>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">OAuth 2.0 Client ID:</span>
-                  <span className="font-mono text-slate-700 dark:text-slate-200 text-[11px] truncate max-w-xs">
-                    393656741660-le42431m94mdl4228vvmos20p2rvd7sv.apps.googleusercontent.com
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Alcances (Scopes):</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">
-                    drive.readonly, drive.file
-                  </span>
-                </div>
-                {driveState.userEmail && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Cuenta de Drive autorizada:</span>
-                    <span className="font-semibold text-blue-500">
-                      {driveState.userEmail}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Notice: Location & Destination Hidden from Users */}
-              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl text-xs space-y-1">
-                <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" />
-                  Privacidad y Aislamiento de Ubicaciones Activo
+            <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300">
+              
+              {/* Notice: Deprecated Google Drive */}
+              <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 rounded-xl text-xs space-y-1.5">
+                <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  Almacenamiento 100% Autónomo y Confidencial
                 </span>
-                <p className="text-amber-700 dark:text-amber-400 text-[11px] leading-relaxed">
-                  Los usuarios y lectores no visualizan nombres de carpetas, rutas ni URLs de Google Drive. El sistema busca y almacena en segundo plano según la configuración fijada a continuación.
+                <p className="text-emerald-900/80 dark:text-emerald-300/90 text-[11.5px] leading-relaxed">
+                  Se ha eliminado la opción anterior de guardar documentos en carpetas externas de Google Drive. Todos los oficios judiciales, resoluciones y documentos en formato PDF se reciben, alojan y custodian directamente en el servidor local de la Comisaría de Minoridad y Violencia Familiar, garantizando soberanía operativa e inviolabilidad de datos.
                 </p>
               </div>
 
-              {/* Configure Pre-Set Locations for Searching and Saving */}
-              <form onSubmit={handleSaveDriveConfig} className="pt-2 space-y-4">
-                
-                {/* 1. Folder to Search / Index from */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1">
-                    1. Carpeta donde buscar la información (ID de Google Drive):
-                  </label>
-                  <input
-                    type="text"
-                    value={searchFolderInput}
-                    onChange={(e) => setSearchFolderInput(e.target.value)}
-                    placeholder="Ej: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs (o dejar en blanco para raíz)"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    El sistema indexará y ejecutará las búsquedas de los usuarios exclusivamente dentro de esta carpeta.
-                  </p>
-                </div>
+              {/* Technical Specifications of Storage */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-3">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Configuración de Almacenamiento Interno</span>
+                </h4>
 
-                {/* 2. Folder to Save / Upload to */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      2. Carpeta donde guardar los archivos PDF (Google Drive):
-                    </label>
-                    <a
-                      href={DEFAULT_DRIVE_FOLDER_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400 inline-flex items-center gap-1 hover:underline"
-                    >
-                      <span>Abrir carpeta en Google Drive</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-slate-400 text-[10.5px] block">Ruta física en el servidor:</span>
+                    <span className="font-mono text-slate-800 dark:text-slate-200 font-semibold text-[11px] block mt-0.5">
+                      /uploads/pdfs/
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Almacenamiento local persistente</span>
                   </div>
-                  <input
-                    type="text"
-                    value={uploadFolderInput}
-                    onChange={(e) => setUploadFolderInput(e.target.value)}
-                    placeholder={DEFAULT_DRIVE_FOLDER_ID}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Cualquier nuevo PDF subido por los usuarios se guardará automáticamente en este destino de Google Drive (ID: {DEFAULT_DRIVE_FOLDER_ID}).
-                  </p>
-                </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-sm"
-                  >
-                    Guardar Configuración de Ubicaciones
-                  </button>
-                  {folderSaveSuccess && (
-                    <p className="text-xs text-emerald-500 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Ubicaciones configuradas y protegidas.</span>
-                    </p>
-                  )}
-                </div>
-              </form>
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-slate-400 text-[10.5px] block">Punto de servicio API:</span>
+                    <span className="font-mono text-slate-800 dark:text-slate-200 font-semibold text-[11px] block mt-0.5">
+                      POST /api/upload-pdf
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Carga directa multipart/form-data</span>
+                  </div>
 
-              {/* Action buttons */}
-              <div className="pt-3 flex items-center gap-3">
-                {driveState.isConnected ? (
-                  <button
-                    onClick={onDisconnectDrive}
-                    className="px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-900 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    Desconectar Google Drive
-                  </button>
-                ) : (
-                  <button
-                    onClick={onConnectDrive}
-                    disabled={driveState.isLoading}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2"
-                  >
-                    {driveState.isLoading ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <HardDrive className="w-3.5 h-3.5" />
-                    )}
-                    <span>Autorizar y Conectar Google Drive</span>
-                  </button>
-                )}
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-slate-400 text-[10.5px] block">Medidas con PDF alojado:</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block mt-0.5">
+                      {(measures || []).filter(m => m.hasCustomPdf).length} de {(measures || []).length} registros
+                    </span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 block">Disponibles para visor y descarga</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-slate-400 text-[10.5px] block">Formato admitido:</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-xs block mt-0.5">
+                      Archivos PDF oficiales (.pdf)
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">Límite por oficio: hasta 50 MB</span>
+                  </div>
+                </div>
               </div>
+
+              {/* Status summary banner */}
+              <div className="flex items-center justify-between p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl text-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span className="font-semibold text-blue-900 dark:text-blue-200">
+                    El sistema está configurado y funcionando 100% en el servidor policial
+                  </span>
+                </div>
+                <span className="font-mono text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+                  Directorio /uploads/pdfs
+                </span>
+              </div>
+
             </div>
           </div>
 
@@ -2113,22 +2054,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-indigo-500" />
-              <span>Garantías de Seguridad</span>
+              <span>Garantías del Servidor</span>
             </h3>
 
             <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400">
               <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl">
                 <span className="font-bold text-blue-700 dark:text-blue-300 block mb-1">
-                  1. Token Client-Side Exclusivo
+                  1. Almacenamiento Local Exclusivo
                 </span>
-                Los tokens de acceso OAuth se manejan directamente en el cliente mediante Google Identity Services, sin exponer secretos ni credenciales privadas.
+                Los archivos quedan custodiados en el disco local del servidor, garantizando que ninguna información judicial sensible salga de la jurisdicción de la institución.
               </div>
 
               <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-xl">
                 <span className="font-bold text-emerald-700 dark:text-emerald-300 block mb-1">
-                  2. Visualizador Embebido Seguro
+                  2. Visualizador Integrado Seguro
                 </span>
-                Los documentos PDF se renderizan directamente mediante Blob URLs y enlaces seguros oficiales, evitando descargas accidentales no autorizadas.
+                Los documentos PDF se visualizan en el visor seguro integrado en el sistema policial, sin depender de visores de Google ni navegadores externos.
               </div>
 
               <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-xl">

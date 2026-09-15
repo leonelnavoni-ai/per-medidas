@@ -64,7 +64,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
   };
 
-  const hasDrivePdf = Boolean(measure.driveWebViewLink || measure.driveFileId);
+  const hasServerPdf = Boolean(measure.serverPdfUrl || measure.hasCustomPdf);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -139,16 +139,14 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <div className="flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 <span className="text-slate-600 dark:text-slate-300">
-                  {hasDrivePdf
-                    ? 'Oficio digital disponible con enlace directo en Google Drive'
-                    : measure.hasCustomPdf
-                    ? `Oficio adjunto: ${measure.pdfFileName || 'Archivo PDF'}`
+                  {hasServerPdf
+                    ? `Oficio digital en servidor: ${measure.pdfFileName || 'Archivo PDF oficial'}`
                     : 'Oficio registrado en sistema policial'}
                 </span>
               </div>
-              {hasDrivePdf && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">
-                  Con Enlace PDF
+              {hasServerPdf && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
+                  PDF en Servidor
                 </span>
               )}
             </div>

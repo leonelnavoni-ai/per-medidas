@@ -113,22 +113,13 @@ export function buildMeasureWhatsAppMessage(
   // Official Court Order / Attached PDF document
   lines.push('');
   lines.push('📄 *OFICIO JUDICIAL:*');
-  if (measure.driveWebViewLink) {
-    lines.push(`🔗 *Ver Oficio (Google Drive Oficial):*`);
-    lines.push(measure.driveWebViewLink);
-    if (measure.pdfFileName) {
-      lines.push(`📎 *Archivo:* ${measure.pdfFileName}`);
+  if (measure.hasCustomPdf) {
+    lines.push(`📎 *Archivo:* ${measure.pdfFileName || 'Oficio digital en formato PDF'}`);
+    if (measure.serverPdfUrl) {
+      lines.push(`🔗 *Enlace Servidor Policial:* ${typeof window !== 'undefined' ? window.location.origin : ''}${measure.serverPdfUrl}`);
+    } else {
+      lines.push('ℹ️ _(Custodiado en el Servidor Policial / Comisaría de Minoridad)_');
     }
-  } else if (measure.driveFileId) {
-    const driveUrl = `https://drive.google.com/file/d/${measure.driveFileId}/view`;
-    lines.push(`🔗 *Ver Oficio (Google Drive Oficial):*`);
-    lines.push(driveUrl);
-    if (measure.pdfFileName) {
-      lines.push(`📎 *Archivo:* ${measure.pdfFileName}`);
-    }
-  } else if (measure.hasCustomPdf) {
-    lines.push(`📎 *Archivo adjunto:* ${measure.pdfFileName || 'Oficio digital adjunto en el sistema'}`);
-    lines.push('ℹ️ _(Disponible en el Sistema Digital de la Comisaría)_');
   } else {
     lines.push('ℹ️ _(Oficio digital registrado y disponible en el Sistema Policial)_');
   }
@@ -298,6 +289,18 @@ export function buildPersonIdentificationWhatsAppMessage(
   }
   if (person.telefono && person.telefono.trim()) {
     lines.push(`• *Teléfono de contacto:* ${person.telefono.trim()}`);
+  }
+  if (person.tipoDocumentoIdentificado || person.claseLicencia) {
+    const docParts = [];
+    if (person.tipoDocumentoIdentificado) docParts.push(`Doc: ${person.tipoDocumentoIdentificado}`);
+    if (person.claseLicencia) docParts.push(`Licencia Clase ${person.claseLicencia}`);
+    lines.push(`• *Identificación:* ${docParts.join(' • ')}`);
+  }
+  if (person.fotoBase64 || person.fotoDocumentoBase64) {
+    const photos = [];
+    if (person.fotoBase64) photos.push('Rostro');
+    if (person.fotoDocumentoBase64) photos.push('Documento escaneado');
+    lines.push(`• *Fotografías registradas en sistema:* SÍ (${photos.join(' y ')})`);
   }
   lines.push('');
 

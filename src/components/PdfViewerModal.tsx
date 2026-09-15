@@ -76,14 +76,22 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
       }
     }
 
-    // 1. If it's already a local Blob URL (starts with blob:)
+    // 1. If it has a server PDF URL (/uploads/pdfs/...)
+    const serverUrl = file.serverPdfUrl || file.measureData?.serverPdfUrl;
+    if (serverUrl) {
+      setActivePdfUrl(serverUrl);
+      setIsLoadingPdf(false);
+      return;
+    }
+
+    // 2. If it's already a local Blob URL (starts with blob:)
     if (file.localBlobUrl && file.localBlobUrl.startsWith('blob:')) {
       setActivePdfUrl(file.localBlobUrl);
       setIsLoadingPdf(false);
       return;
     }
 
-    // 2. If it is a judicial measure record without blob URL, generate standard PDF blob
+    // 3. If it is a judicial measure record without blob URL, generate standard PDF blob
     if (file.measureData) {
       const measureBlob = generateJudicialMeasurePdfBlob(file.measureData);
       const blobUrl = URL.createObjectURL(measureBlob);

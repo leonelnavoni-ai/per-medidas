@@ -159,6 +159,9 @@ export interface IdentifiedPerson {
   observaciones?: string;
   vehiculo?: string; // Dominio, marca y modelo si se desplazaba en vehículo
   fotoBase64?: string;
+  fotoDocumentoBase64?: string; // Foto del documento escaneado (DNI / Licencia de conducir)
+  tipoDocumentoIdentificado?: 'DNI' | 'LICENCIA' | 'OTRO';
+  claseLicencia?: string;
   createdAt: string;
   createdBy: string;
 }

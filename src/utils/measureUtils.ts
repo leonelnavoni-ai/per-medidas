@@ -78,12 +78,12 @@ export function measureToDriveFile(m: JudicialMeasure): DriveFile {
     m.provenienteDe,
     m.medidaReciproca === 'Si' ? 'Medida Recíproca' : 'No Recíproca',
     `Oficio ${m.nroOficio}`,
-    m.driveFolder ? `Carpeta: ${m.driveFolder}` : 'Carpeta: Medidas Judiciales',
+    'Servidor Policial',
     m.hasCustomPdf ? 'PDF Oficial Adjunto' : 'Acta Generada'
   ];
 
   return {
-    id: m.driveFileId || m.id,
+    id: m.id,
     name: fileName,
     mimeType: 'application/pdf',
     size: fileSize,
@@ -91,14 +91,13 @@ export function measureToDriveFile(m: JudicialMeasure): DriveFile {
     modifiedTime: m.lastUpdated || m.timestamp,
     category: m.tipoMedida,
     tags,
-    isHostedLocal: !m.driveFileId,
+    isHostedLocal: true,
     serverPdfUrl: m.serverPdfUrl,
     localBlobUrl: blobUrl,
     pdfBase64: m.pdfBase64,
-    description: `Oficio Judicial N° ${m.nroOficio}. Beneficiario/a: ${m.victima}. Denunciado/a: ${m.victimario}. Vigente: ${m.fechaDesde} hasta ${m.fechaHasta || 'Duración de la causa'}. Organismo emisor: ${m.provenienteDe}.${m.driveFolder ? ` [Google Drive: ${m.driveFolder}]` : ''}`,
+    description: `Oficio Judicial N° ${m.nroOficio}. Beneficiario/a: ${m.victima}. Denunciado/a: ${m.victimario}. Vigente: ${m.fechaDesde} hasta ${m.fechaHasta || 'Duración de la causa'}. Organismo emisor: ${m.provenienteDe}. [Servidor Policial /uploads/pdfs]`,
     uploadedBy: m.updatedBy || 'Poder Judicial / Registro Central',
-    folderPath: m.driveFolder || 'Medidas Judiciales',
-    driveId: m.driveFileId,
+    folderPath: 'Servidor Policial / Medidas',
     measureData: m,
   };
 }

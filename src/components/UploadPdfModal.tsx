@@ -6,11 +6,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Tag,
-  ShieldCheck
+  ShieldCheck,
+  Server,
 } from 'lucide-react';
-import { DriveFile, DriveConnectionState } from '../types';
-import { CATEGORIES, DEFAULT_DRIVE_FOLDER_ID, DEFAULT_DRIVE_FOLDER_URL } from '../data/initialData';
-import { DriveService } from '../services/driveService';
+import { DriveFile } from '../types';
+import { CATEGORIES } from '../data/initialData';
 import { ApiService } from '../services/apiService';
 import { formatBytes } from '../utils/formatters';
 import { fileToBase64 } from '../utils/measureUtils';
@@ -19,7 +19,6 @@ interface UploadPdfModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddFile: (newFile: DriveFile) => void;
-  driveState: DriveConnectionState;
   currentUserName: string;
 }
 
@@ -27,7 +26,6 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
   isOpen,
   onClose,
   onAddFile,
-  driveState,
   currentUserName,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -92,59 +90,35 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
     try {
       const base64Data = await fileToBase64(selectedFile);
 
-      // 1. Upload to the server so the physical PDF is permanently stored on the server
+      // Upload to the server so the physical PDF is permanently stored on the server (/uploads/pdfs)
       let serverPdfUrl: string | undefined;
       try {
         const uploadResult = await ApiService.uploadPdf(selectedFile);
         serverPdfUrl = uploadResult.fileUrl;
       } catch (uploadErr) {
-        console.warn('Could not upload to server, falling back to local/drive:', uploadErr);
+        console.warn('Could not upload to server endpoint, continuing with base64 backup:', uploadErr);
       }
 
-      // Storage destination: configured Google Drive repository folder
-      const targetUploadFolder = driveState.uploadFolderId || DEFAULT_DRIVE_FOLDER_ID;
-
-      if (driveState.isConnected && driveState.accessToken) {
-        // Upload automatically to the pre-configured Drive repository folder
-        const uploadedDriveFile = await DriveService.uploadPdfFile(
-          driveState.accessToken,
-          selectedFile,
-          targetUploadFolder
-        );
-
-        const newDoc: DriveFile = {
-          ...uploadedDriveFile,
-          name: title.trim() || selectedFile.name,
-          category,
-          tags,
-          description: description.trim(),
-          uploadedBy: currentUserName,
-          serverPdfUrl,
-          localBlobUrl: URL.createObjectURL(selectedFile),
-          pdfBase64: base64Data,
-        };
-        onAddFile(newDoc);
-      } else {
-        // Automatically save to local repository database with permanent server file URL
-        const blobUrl = URL.createObjectURL(selectedFile);
-        const newDoc: DriveFile = {
-          id: `hosted-${Date.now()}`,
-          name: title.trim() || selectedFile.name,
-          mimeType: 'application/pdf',
-          size: selectedFile.size,
-          createdTime: new Date().toISOString(),
-          modifiedTime: new Date().toISOString(),
-          category,
-          tags,
-          description: description.trim(),
-          isHostedLocal: true,
-          serverPdfUrl,
-          localBlobUrl: blobUrl,
-          uploadedBy: currentUserName,
-          pdfBase64: base64Data,
-        };
-        onAddFile(newDoc);
-      }
+      // Automatically save to local repository database with permanent server file URL
+      const blobUrl = URL.createObjectURL(selectedFile);
+      const newDoc: DriveFile = {
+        id: `hosted-${Date.now()}`,
+        name: title.trim() || selectedFile.name,
+        mimeType: 'application/pdf',
+        size: selectedFile.size,
+        createdTime: new Date().toISOString(),
+        modifiedTime: new Date().toISOString(),
+        category,
+        tags,
+        description: description.trim(),
+        isHostedLocal: true,
+        serverPdfUrl,
+        localBlobUrl: blobUrl,
+        uploadedBy: currentUserName,
+        pdfBase64: base64Data,
+        folderPath: 'Servidor Policial / Documentos',
+      };
+      onAddFile(newDoc);
 
       // Reset and close
       setSelectedFile(null);
@@ -154,8 +128,8 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
       setIsUploading(false);
       onClose();
     } catch (err: any) {
-      console.error('Error al subir archivo:', err);
-      setUploadError(err.message || 'Error al procesar y guardar el archivo PDF.');
+      console.error('Error al subir archivo al servidor:', err);
+      setUploadError(err.message || 'Error al procesar y guardar el archivo PDF en el servidor.');
       setIsUploading(false);
     }
   };
@@ -175,7 +149,7 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
                 Alojar Nuevo Archivo PDF
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                El documento se guardará e indexará en el repositorio configurado
+                El documento se guardará directamente en el servidor seguro de la Comisaría
               </p>
             </div>
           </div>
@@ -315,17 +289,15 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
             />
           </div>
 
-          {/* Destino de guardado en Google Drive */}
+          {/* Destino de guardado en Servidor */}
           <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl text-[11px] text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
-            <span>Carpeta destino Google Drive:</span>
-            <a
-              href={DEFAULT_DRIVE_FOLDER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 hover:underline flex items-center gap-1"
-            >
-              <span>ID: {DEFAULT_DRIVE_FOLDER_ID}</span>
-            </a>
+            <span className="flex items-center gap-1.5 font-medium">
+              <Server className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              Destino: Servidor local de la Comisaría (/uploads/pdfs)
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+              Servidor Local
+            </span>
           </div>
 
           {/* Submit Buttons */}
@@ -346,12 +318,12 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
               {isUploading ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Guardando e Indexando...</span>
+                  <span>Guardando en Servidor...</span>
                 </>
               ) : (
                 <>
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Alojar Documento</span>
+                  <span>Alojar en Servidor</span>
                 </>
               )}
             </button>

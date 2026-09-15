@@ -24,6 +24,8 @@ import {
   SlidersHorizontal,
   LayoutGrid,
   List,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
 import { IdentifiedPerson, JudicialMeasure, PermissionSet, UserProfile } from '../types';
 
@@ -54,6 +56,7 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
   const [filterDatePreset, setFilterDatePreset] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedPersonForDetail, setSelectedPersonForDetail] = useState<IdentifiedPerson | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Helper to find matching judicial measures for any identified person
   const getMatchingMeasures = (person: IdentifiedPerson): JudicialMeasure[] => {
@@ -405,28 +408,68 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
                       </div>
                     </div>
 
-                    {/* Row 2: Citizen Name, Alias & DNI */}
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-extrabold text-white text-base tracking-tight">
-                          {person.apellidoNombre}
-                        </h4>
-                        {person.alias && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 font-semibold border border-slate-700">
-                            "{person.alias}"
-                          </span>
-                        )}
-                      </div>
+                    {/* Row 2: Citizen Photo + Name, Alias & DNI */}
+                    <div className="flex items-start gap-3">
+                      {person.fotoBase64 ? (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImage(person.fotoBase64 || null);
+                          }}
+                          className="relative w-12 h-12 rounded-xl overflow-hidden border border-slate-700 bg-black shrink-0 cursor-pointer group shadow-sm hover:border-blue-500 transition-colors"
+                          title="Click para ver foto del ciudadano ampliada"
+                        >
+                          <img
+                            src={person.fotoBase64}
+                            alt={person.apellidoNombre}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Eye className="w-3.5 h-3.5 text-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 text-slate-500 flex items-center justify-center shrink-0">
+                          <User className="w-6 h-6" />
+                        </div>
+                      )}
 
-                      <div className="flex items-center gap-2 text-xs text-slate-300 font-mono mt-1">
-                        <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-blue-400 font-bold">
-                          DNI {person.dni || 'S/D'}
-                        </span>
-                        <span>•</span>
-                        <span className="text-slate-400">
-                          {person.nacionalidad || 'Argentina'}
-                          {person.edad ? ` (${person.edad} años)` : ''}
-                        </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-extrabold text-white text-base tracking-tight truncate" title={person.apellidoNombre}>
+                            {person.apellidoNombre}
+                          </h4>
+                          {person.alias && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 font-semibold border border-slate-700">
+                              "{person.alias}"
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-slate-300 font-mono mt-1 flex-wrap">
+                          <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-blue-400 font-bold">
+                            DNI {person.dni || 'S/D'}
+                          </span>
+                          <span>•</span>
+                          <span className="text-slate-400">
+                            {person.nacionalidad || 'Argentina'}
+                            {person.edad ? ` (${person.edad} años)` : ''}
+                          </span>
+                          {person.fotoDocumentoBase64 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewImage(person.fotoDocumentoBase64 || null);
+                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/80 hover:bg-blue-900 cursor-pointer flex items-center gap-1 font-sans"
+                              title="Ver foto del documento escaneado"
+                            >
+                              <Camera className="w-2.5 h-2.5" />
+                              <span>{person.tipoDocumentoIdentificado || 'Doc'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -591,20 +634,50 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
 
                       {/* Ciudadano / DNI */}
                       <td className="py-3 px-4">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-white text-xs">
-                              {person.apellidoNombre}
-                            </span>
-                            {person.alias && (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-medium">
-                                "{person.alias}"
+                        <div className="flex items-center gap-3">
+                          {person.fotoBase64 ? (
+                            <div
+                              onClick={() => setPreviewImage(person.fotoBase64 || null)}
+                              className="w-9 h-9 rounded-lg overflow-hidden border border-slate-700 bg-black shrink-0 cursor-pointer hover:border-blue-500 transition-colors"
+                              title="Ver foto"
+                            >
+                              <img
+                                src={person.fotoBase64}
+                                alt={person.apellidoNombre}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-slate-950 border border-slate-800 text-slate-500 flex items-center justify-center shrink-0">
+                              <User className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-white text-xs">
+                                {person.apellidoNombre}
                               </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono mt-0.5">
-                            <span>DNI: {person.dni || 'Sin documento'}</span>
-                            {person.edad && <span>• {person.edad} años</span>}
+                              {person.alias && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-medium">
+                                  "{person.alias}"
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono mt-0.5">
+                              <span>DNI: {person.dni || 'Sin documento'}</span>
+                              {person.edad && <span>• {person.edad} años</span>}
+                              {person.fotoDocumentoBase64 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImage(person.fotoDocumentoBase64 || null)}
+                                  className="text-[9px] px-1 rounded bg-blue-950 text-blue-300 border border-blue-800 hover:bg-blue-900 cursor-pointer flex items-center gap-0.5 font-sans"
+                                  title="Ver documento"
+                                >
+                                  <Camera className="w-2 h-2" />
+                                  <span>{person.tipoDocumentoIdentificado || 'Doc'}</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -850,6 +923,66 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
                 );
               })()}
 
+              {/* Photographs Gallery if captured */}
+              {(selectedPersonForDetail.fotoBase64 || selectedPersonForDetail.fotoDocumentoBase64) && (
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Registros Fotográficos Adjuntos</span>
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {selectedPersonForDetail.fotoBase64 && (
+                      <div className="space-y-1">
+                        <span className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
+                          <span>Fotografía del Ciudadano:</span>
+                          <span className="text-[10px] text-indigo-300 font-mono">Rostro / Filiatorio</span>
+                        </span>
+                        <div
+                          onClick={() => setPreviewImage(selectedPersonForDetail.fotoBase64 || null)}
+                          className="rounded-xl overflow-hidden border border-slate-800 bg-black aspect-[4/3] relative cursor-pointer group shadow-sm hover:border-indigo-500 transition-colors"
+                        >
+                          <img
+                            src={selectedPersonForDetail.fotoBase64}
+                            alt="Rostro del ciudadano"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold gap-1.5 transition-opacity">
+                            <Eye className="w-4 h-4" />
+                            <span>Ampliar Fotografía</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedPersonForDetail.fotoDocumentoBase64 && (
+                      <div className="space-y-1">
+                        <span className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
+                          <span>Documento Escaneado:</span>
+                          <span className="text-[10px] text-blue-300 font-mono">
+                            {selectedPersonForDetail.tipoDocumentoIdentificado || 'DNI / Licencia'}
+                            {selectedPersonForDetail.claseLicencia ? ` (Clase ${selectedPersonForDetail.claseLicencia})` : ''}
+                          </span>
+                        </span>
+                        <div
+                          onClick={() => setPreviewImage(selectedPersonForDetail.fotoDocumentoBase64 || null)}
+                          className="rounded-xl overflow-hidden border border-slate-800 bg-black aspect-[4/3] relative cursor-pointer group shadow-sm hover:border-blue-500 transition-colors"
+                        >
+                          <img
+                            src={selectedPersonForDetail.fotoDocumentoBase64}
+                            alt="Documento escaneado"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold gap-1.5 transition-opacity">
+                            <Eye className="w-4 h-4" />
+                            <span>Ampliar Documento</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Data Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
@@ -980,6 +1113,39 @@ export const PersonIdentificationExplorer: React.FC<PersonIdentificationExplorer
                   Cerrar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / Zoom modal for high-res photo inspection */}
+      {previewImage && (
+        <div
+          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in cursor-zoom-out"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] bg-slate-950 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col cursor-default"
+          >
+            <div className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-blue-400" />
+                <span>Vista de Fotografía en Alta Resolución</span>
+              </span>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-2 overflow-auto flex items-center justify-center bg-black">
+              <img
+                src={previewImage}
+                alt="Ampliación"
+                className="max-h-[80vh] w-auto object-contain rounded-lg shadow-lg"
+              />
             </div>
           </div>
         </div>
