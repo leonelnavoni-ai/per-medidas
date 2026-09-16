@@ -1010,13 +1010,14 @@ export default function App() {
 
         finalMeasure.hasCustomPdf = true;
         finalMeasure.serverPdfUrl = serverPdfUrl;
-        finalMeasure.pdfBase64 = base64Data;
+        // Avoid bloating JSON payload and exceeding localStorage quota when server storage is active
+        finalMeasure.pdfBase64 = serverPdfUrl ? undefined : base64Data;
         finalMeasure.pdfBlobUrl = serverPdfUrl || localBlobUrl;
         finalMeasure.pdfFileName = attachedFile.name;
         finalMeasure.pdfFileSize = attachedFile.size;
         finalMeasure.uploadedAt = new Date().toISOString();
 
-        // Register in files list for the system document explorer
+        // Register in files list and persist in server document explorer
         const localFileRecord: DriveFile = {
           id: `measure-pdf-${finalMeasure.id}`,
           name: attachedFile.name,
@@ -1039,7 +1040,7 @@ export default function App() {
           folderPath: 'Servidor Policial / Medidas',
         };
 
-        setFiles((prev) => [localFileRecord, ...prev.filter((f) => f.id !== localFileRecord.id)]);
+        updateFilesState((prev) => [localFileRecord, ...prev.filter((f) => f.id !== localFileRecord.id)]);
       } catch (err: any) {
         console.error('Error processing PDF upload:', err);
         showToast(`Error al procesar el archivo PDF: ${err.message}`, 'error');

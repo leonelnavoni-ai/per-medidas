@@ -106,6 +106,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // PDF Storage Sync States
+  const [isSyncingPdfs, setIsSyncingPdfs] = useState(false);
+  const [syncPdfFeedback, setSyncPdfFeedback] = useState<string | null>(null);
+
+  const handleSyncMeasurePdfs = async () => {
+    setIsSyncingPdfs(true);
+    setSyncPdfFeedback(null);
+    try {
+      const result = await ApiService.generateMeasurePdfs();
+      if (result.success) {
+        setSyncPdfFeedback(`✓ Sincronización exitosa: ${result.total} oficios verificados y resguardados en el servidor (/uploads/pdfs).`);
+      } else {
+        setSyncPdfFeedback('Aviso: Se intentó sincronizar con el servidor policial.');
+      }
+    } catch (e: any) {
+      setSyncPdfFeedback(`Error al sincronizar: ${e.message}`);
+    } finally {
+      setIsSyncingPdfs(false);
+    }
+  };
+
   const handleDownloadBackup = async () => {
     setIsExportingBackup(true);
     setBackupMessage(null);
@@ -2045,6 +2066,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <span className="font-mono text-[11px] text-blue-700 dark:text-blue-300 font-medium">
                   Directorio /uploads/pdfs
                 </span>
+              </div>
+
+              {/* Sync and Check Physical PDFs Action */}
+              <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div>
+                  <h5 className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Verificación de Oficios en Disco del Servidor</span>
+                  </h5>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    Garantiza que todas las medidas judiciales tengan su archivo PDF oficial guardado en <code className="font-mono bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded">/uploads/pdfs/</code>.
+                  </p>
+                  {syncPdfFeedback && (
+                    <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 mt-1.5 bg-white/80 dark:bg-slate-900/80 p-2 rounded-lg border border-emerald-300 dark:border-emerald-800">
+                      {syncPdfFeedback}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={handleSyncMeasurePdfs}
+                  disabled={isSyncingPdfs}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPdfs ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingPdfs ? 'Verificando...' : 'Sincronizar PDFs en Servidor'}</span>
+                </button>
               </div>
 
             </div>

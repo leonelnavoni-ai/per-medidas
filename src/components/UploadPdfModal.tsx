@@ -115,7 +115,7 @@ export const UploadPdfModal: React.FC<UploadPdfModalProps> = ({
         serverPdfUrl,
         localBlobUrl: blobUrl,
         uploadedBy: currentUserName,
-        pdfBase64: base64Data,
+        pdfBase64: serverPdfUrl ? undefined : base64Data,
         folderPath: 'Servidor Policial / Documentos',
       };
       onAddFile(newDoc);

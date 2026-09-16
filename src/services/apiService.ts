@@ -414,6 +414,20 @@ export class ApiService {
     }
   }
 
+  // Force physical PDF generation on server for all measures
+  static async generateMeasurePdfs(): Promise<{ success: boolean; total: number; generatedCount: number }> {
+    try {
+      const res = await fetchWithPhpFallback('/api/generate-measure-pdfs', {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Error al sincronizar PDFs en el servidor');
+      return await safeJson(res);
+    } catch (e) {
+      console.warn('Error en generateMeasurePdfs:', e);
+      return { success: false, total: 0, generatedCount: 0 };
+    }
+  }
+
   // ---- AUDIT & TRACEABILITY LOGS ----
   static async getAuditLogs(): Promise<AuditLog[]> {
     try {

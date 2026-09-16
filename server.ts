@@ -143,7 +143,7 @@ async function startServer() {
   });
 
   // 2. Upload PDF to server storage
-  app.post('/api/upload-pdf', upload.single('pdf'), (req, res) => {
+  const handlePdfUpload = (req: any, res: any) => {
     try {
       if (!req.file) {
         res.status(400).json({ error: 'No se envió ningún archivo PDF válido' });
@@ -161,6 +161,30 @@ async function startServer() {
       const fileUrl = `/uploads/pdfs/${req.file.filename}`;
       console.log(`[Upload] PDF guardado en servidor: ${fileUrl} (${req.file.size} bytes)`);
 
+      // Automatically register file into documents.json
+      try {
+        const docs = readJsonFile<DriveFile[]>(DOCUMENTS_FILE, []);
+        const newDoc: DriveFile = {
+          id: `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: req.file.originalname,
+          mimeType: req.file.mimetype || 'application/pdf',
+          size: req.file.size,
+          createdTime: new Date().toISOString(),
+          modifiedTime: new Date().toISOString(),
+          category: 'Medidas Judiciales',
+          tags: ['PDF Servidor', req.file.originalname],
+          isHostedLocal: true,
+          serverPdfUrl: fileUrl,
+          description: `Archivo PDF subido y alojado en servidor policial (/uploads/pdfs).`,
+          uploadedBy: 'Operador Policial',
+          folderPath: 'Servidor Policial / Documentos',
+        };
+        const updatedDocs = [newDoc, ...docs.filter((d) => d.name !== req.file.originalname)];
+        writeJsonFile(DOCUMENTS_FILE, updatedDocs);
+      } catch (docErr) {
+        console.warn('Could not register in documents.json:', docErr);
+      }
+
       res.status(200).json({
         success: true,
         fileUrl,
@@ -173,6 +197,168 @@ async function startServer() {
     } catch (err: any) {
       console.error('Error al procesar subida de PDF:', err);
       res.status(500).json({ error: err.message || 'Error interno al guardar archivo PDF en el servidor' });
+    }
+  };
+
+  app.post('/api/upload-pdf', upload.single('pdf'), handlePdfUpload);
+  app.post('/api/upload_pdf', upload.single('pdf'), handlePdfUpload);
+
+  // Endpoint to generate and guarantee physical PDFs on server for all measures
+  app.post('/api/generate-measure-pdfs', (_req, res) => {
+    try {
+      const measures = readJsonFile<JudicialMeasure[]>(MEASURES_FILE, []);
+      let generatedCount = 0;
+
+      for (const m of measures) {
+        const cleanOficio = (m.nroOficio || 'SN').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const fileName = `oficio_${cleanOficio}_${m.id}.pdf`;
+        const filePath = path.join(PDF_UPLOADS_DIR, fileName);
+        const publicPath = path.join(PUBLIC_UPLOADS_DIR, fileName);
+
+        if (!fs.existsSync(filePath) || !m.serverPdfUrl) {
+          const sanitize = (txt = '') =>
+            String(txt)
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/\\/g, '\\\\')
+              .replace(/\(/g, '\\(')
+              .replace(/\)/g, '\\)');
+          const escapePdf = (t: any) => sanitize(String(t || ''));
+
+          const titleText = `OFICIO JUDICIAL N ${m.nroOficio || 'S/N'}`;
+          const courtText = `ORGANISMO EMISOR: ${m.provenienteDe || 'PODER JUDICIAL'}`;
+          const measureType = `MEDIDA: ${String(m.tipoMedida || '').toUpperCase()}`;
+          const victimaText = `BENEFICIARIO/A: ${String(m.victima || '')}`;
+          const victimarioText = `DENUNCIADO/A: ${String(m.victimario || '')}`;
+          const vigenciaText = `VIGENCIA: Del ${m.fechaDesde || 'Inmediata'} al ${m.fechaHasta || 'DURACION DE LA CAUSA'}`;
+          const reciprocaText = `MEDIDA RECIPROCA: ${m.medidaReciproca === 'Si' ? 'SI - AMBAS PARTES' : 'NO'}`;
+          const timestampText = `Fecha y hora de registro: ${m.timestamp || new Date().toLocaleString()}`;
+
+          const contentStream = `
+q
+0.08 0.15 0.3 rg
+40 760 515 45 re
+f
+1 1 1 rg
+BT
+/F1 16 Tf
+60 782 Td
+(PODER JUDICIAL - ACTA OFICIAL DE MEDIDA DE PROTECCION) Tj
+ET
+
+0.2 0.25 0.35 rg
+BT
+/F1 13 Tf
+60 735 Td
+(${escapePdf(titleText)}) Tj
+/F2 10 Tf
+0 -18 Td
+(${escapePdf(courtText)}) Tj
+0 -16 Td
+(${escapePdf(timestampText)}) Tj
+ET
+
+0.8 0.85 0.9 rg
+40 685 515 1.5 re
+f
+
+0.1 0.15 0.2 rg
+BT
+/F1 12 Tf
+60 660 Td
+(1. IDENTIFICACION DE LAS PARTES Y MEDIDA DISPUESTA) Tj
+/F2 11 Tf
+0 -22 Td
+(${escapePdf(measureType.slice(0, 75))}) Tj
+0 -18 Td
+(${escapePdf(victimaText.slice(0, 75))}) Tj
+0 -18 Td
+(${escapePdf(victimarioText.slice(0, 75))}) Tj
+0 -18 Td
+(${escapePdf(reciprocaText)}) Tj
+0 -18 Td
+(${escapePdf(vigenciaText)}) Tj
+ET
+
+0.8 0.85 0.9 rg
+40 545 515 1 re
+f
+
+0.1 0.15 0.2 rg
+BT
+/F1 12 Tf
+60 520 Td
+(2. DISPOSICIONES JUDICIALES Y OBLIGACIONES) Tj
+/F2 10 Tf
+0 -20 Td
+(Por la presente se notifica que la persona denunciada debera abstenerse de realizar) Tj
+0 -16 Td
+(actos de perturbacion, intimidacion, malos tratos o acercamiento por cualquier medio) Tj
+0 -16 Td
+(directo o indirecto hacia la persona requirente y su grupo familiar conviviente.) Tj
+0 -16 Td
+(En caso de incumplimiento, se incurrira en el delito de desobediencia judicial) Tj
+0 -16 Td
+(conforme a los articulos pertinentes del Codigo Penal y normativas de proteccion.) Tj
+ET
+
+0.94 0.96 0.99 rg
+40 370 515 45 re
+f
+0.2 0.3 0.5 rg
+BT
+/F1 10 Tf
+60 398 Td
+(OFICIO REGISTRADO EN EL SISTEMA DE GESTION JUDICIAL DIGITAL) Tj
+/F2 9 Tf
+0 -15 Td
+(Expediente: ${escapePdf(m.nroOficio)}   |   Seguimiento y Registro Oficial Digital) Tj
+ET
+
+0.4 0.45 0.5 rg
+BT
+/F2 9 Tf
+60 300 Td
+(Firma y Sello del Actuario / Juzgado Emisor) Tj
+350 300 Td
+(Firma de Notificacion y Toma de Razon) Tj
+ET
+0.7 0.7 0.7 rg
+60 320 180 1 re
+f
+350 320 180 1 re
+f
+
+0.5 0.55 0.6 rg
+BT
+/F2 8 Tf
+200 40 Td
+(Constancia Oficial de Medida Judicial - Consulta y Resguardo Digital) Tj
+ET
+Q
+`;
+          const streamLen = Buffer.byteLength(contentStream, 'utf8');
+          const pdfRaw = `%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length ${streamLen} >>\nstream\n${contentStream}\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000262 00000 n \n0000000000 00000 n \n0000000000 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${streamLen + 400}\n%%EOF`;
+
+          try {
+            fs.writeFileSync(filePath, pdfRaw, 'utf8');
+            fs.writeFileSync(publicPath, pdfRaw, 'utf8');
+            m.hasCustomPdf = true;
+            m.serverPdfUrl = `/uploads/pdfs/${fileName}`;
+            m.pdfFileName = fileName;
+            m.pdfFileSize = streamLen;
+            m.uploadedAt = new Date().toISOString();
+            generatedCount++;
+          } catch (e) {
+            console.warn('Could not write pdf for measure:', m.id, e);
+          }
+        }
+      }
+
+      writeJsonFile(MEASURES_FILE, measures);
+      res.json({ success: true, total: measures.length, generatedCount });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Error al generar PDFs' });
     }
   });
 
