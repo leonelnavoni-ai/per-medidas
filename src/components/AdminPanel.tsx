@@ -65,7 +65,7 @@ interface AdminPanelProps {
   onDisconnectDrive: () => void;
   onUpdateDriveConfig: (searchFolderId: string, uploadFolderId: string) => void;
   onAddAuditLog: (action: any, details: string, targetFile?: string, status?: 'SUCCESS' | 'DENIED') => void;
-  initialSubTab?: 'users' | 'queries' | 'audit' | 'storage' | 'drive' | 'backup';
+  initialSubTab?: 'users' | 'queries' | 'backup' | string;
   measures?: JudicialMeasure[];
   identifications?: IdentifiedPerson[];
   onRestoreMeasures?: (measures: JudicialMeasure[]) => void;
@@ -79,10 +79,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   currentUser,
   onSwitchUser,
   auditLogs,
-  driveState,
-  onConnectDrive,
-  onDisconnectDrive,
-  onUpdateDriveConfig,
+  driveState: _driveState,
+  onConnectDrive: _onConnectDrive,
+  onDisconnectDrive: _onDisconnectDrive,
+  onUpdateDriveConfig: _onUpdateDriveConfig,
   onAddAuditLog,
   initialSubTab,
   measures,
@@ -91,13 +91,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRestoreIdentifications,
   onRestoreAuditLogs,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'audit' | 'storage' | 'backup'>(
-    initialSubTab === 'drive' ? 'storage' : ((initialSubTab as any) || 'users')
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'queries' | 'backup'>(
+    initialSubTab === 'queries' || initialSubTab === 'backup' ? initialSubTab : 'users'
   );
 
   React.useEffect(() => {
-    if (initialSubTab) {
-      setActiveSubTab(initialSubTab === 'drive' ? 'storage' : (initialSubTab as any));
+    if (initialSubTab === 'queries' || initialSubTab === 'backup') {
+      setActiveSubTab(initialSubTab);
+    } else {
+      setActiveSubTab('users');
     }
   }, [initialSubTab]);
 
@@ -105,27 +107,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // PDF Storage Sync States
-  const [isSyncingPdfs, setIsSyncingPdfs] = useState(false);
-  const [syncPdfFeedback, setSyncPdfFeedback] = useState<string | null>(null);
-
-  const handleSyncMeasurePdfs = async () => {
-    setIsSyncingPdfs(true);
-    setSyncPdfFeedback(null);
-    try {
-      const result = await ApiService.generateMeasurePdfs();
-      if (result.success) {
-        setSyncPdfFeedback(`✓ Sincronización exitosa: ${result.total} oficios verificados y resguardados en el servidor (/uploads/pdfs).`);
-      } else {
-        setSyncPdfFeedback('Aviso: Se intentó sincronizar con el servidor policial.');
-      }
-    } catch (e: any) {
-      setSyncPdfFeedback(`Error al sincronizar: ${e.message}`);
-    } finally {
-      setIsSyncingPdfs(false);
-    }
-  };
 
   const handleDownloadBackup = async () => {
     setIsExportingBackup(true);
@@ -242,24 +223,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     reader.readAsText(file);
   };
 
-  // System Audit Diagnostic State
-  const [systemAuditReport, setSystemAuditReport] = useState<any | null>(null);
-  const [isRunningSystemAudit, setIsRunningSystemAudit] = useState(false);
-  const [auditExportCopied, setAuditExportCopied] = useState(false);
-
-  const runSystemAudit = async () => {
-    setIsRunningSystemAudit(true);
-    try {
-      const report = await ApiService.getSystemAuditReport();
-      setSystemAuditReport(report);
-      onAddAuditLog('SEARCH', 'Ejecución de auditoría de diagnóstico e integridad del sistema policial');
-    } catch (e: any) {
-      console.warn('Error al ejecutar auditoría del sistema:', e);
-    } finally {
-      setIsRunningSystemAudit(false);
-    }
-  };
-  
   // User query monitoring states
   const [selectedQueryUserId, setSelectedQueryUserId] = useState<string>('all');
   const [querySearchTerm, setQuerySearchTerm] = useState<string>('');
@@ -342,19 +305,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // User deletion state
   const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
-
-  // Pre-configured Search and Save repository locations
-  const [searchFolderInput, setSearchFolderInput] = useState(
-    driveState.searchFolderId || driveState.folderId || DEFAULT_DRIVE_FOLDER_ID
-  );
-  const [uploadFolderInput, setUploadFolderInput] = useState(
-    driveState.uploadFolderId || driveState.folderId || DEFAULT_DRIVE_FOLDER_ID
-  );
-  const [folderSaveSuccess, setFolderSaveSuccess] = useState(false);
-
-  // Audit log filter
-  const [auditFilter, setAuditFilter] = useState('');
-  const [auditActionFilter, setAuditActionFilter] = useState<'all' | 'SEARCH' | 'VIEW' | 'UPLOAD' | 'AUTH'>('all');
 
   const handleRoleChange = (userId: string, newRole: RoleType) => {
     setUsers((prev) =>
@@ -565,60 +515,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     setDeletingUser(null);
   };
-
-  const extractIdFromUrl = (val: string): string => {
-    const trimmed = val.trim();
-    if (trimmed.includes('drive.google.com') && trimmed.includes('/folders/')) {
-      const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) return match[1];
-    }
-    return trimmed;
-  };
-
-  const handleSaveDriveConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanSearch = extractIdFromUrl(searchFolderInput) || DEFAULT_DRIVE_FOLDER_ID;
-    const cleanUpload = extractIdFromUrl(uploadFolderInput) || DEFAULT_DRIVE_FOLDER_ID;
-    setSearchFolderInput(cleanSearch);
-    setUploadFolderInput(cleanUpload);
-    onUpdateDriveConfig(cleanSearch, cleanUpload);
-    setFolderSaveSuccess(true);
-    setTimeout(() => setFolderSaveSuccess(false), 3000);
-    onAddAuditLog(
-      'UPDATE_PERMISSIONS',
-      `Ubicaciones de Google Drive configuradas: Búsqueda [${cleanSearch}] | Guardado [${cleanUpload}]`,
-      undefined,
-      'SUCCESS'
-    );
-  };
-
-  const filteredLogs = auditLogs.filter((log) => {
-    if (auditActionFilter === 'SEARCH') {
-      const isSearch =
-        log.action === 'SEARCH' ||
-        log.details.toLowerCase().includes('búsqueda') ||
-        log.details.toLowerCase().includes('consulta') ||
-        log.details.toLowerCase().includes('dni');
-      if (!isSearch) return false;
-    } else if (auditActionFilter === 'VIEW') {
-      if (log.action !== 'VIEW') return false;
-    } else if (auditActionFilter === 'UPLOAD') {
-      if (log.action !== 'UPLOAD') return false;
-    } else if (auditActionFilter === 'AUTH') {
-      const isAuth =
-        log.action.includes('AUTH') ||
-        log.action.includes('LOGIN') ||
-        log.action.includes('PASSWORD') ||
-        log.action.includes('DRIVE');
-      if (!isAuth) return false;
-    }
-
-    return (
-      log.userName.toLowerCase().includes(auditFilter.toLowerCase()) ||
-      log.details.toLowerCase().includes(auditFilter.toLowerCase()) ||
-      log.action.toLowerCase().includes(auditFilter.toLowerCase())
-    );
-  });
 
   // Helper to determine if an audit log is a user query/search
   const isQueryLog = (log: AuditLog) => {
@@ -849,7 +745,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               Panel de Administración y Seguridad
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Control de accesos basado en roles (RBAC), auditoría y enlace con Google Drive
+              Control de accesos basado en roles (RBAC), consultas de usuarios y copias de seguridad del sistema
             </p>
           </div>
         </div>
@@ -884,31 +780,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {allQueryLogs.length}
               </span>
             )}
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('audit')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeSubTab === 'audit'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <FileCheck className="w-3.5 h-3.5" />
-            <span>Auditoría de Accesos</span>
-          </button>
-
-          <button
-            id="tab-almacenamiento-servidor"
-            onClick={() => setActiveSubTab('storage')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeSubTab === 'storage'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <Server className="w-3.5 h-3.5" />
-            <span>Almacenamiento Servidor</span>
           </button>
 
           {/* SUBTAB: COPIA DE SEGURIDAD */}
@@ -957,96 +828,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeSubTab === 'users' && (
         <div className="space-y-6">
           
-          {/* Permissions Matrix Reference Card */}
-          <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+          {/* User List Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
               <div>
-                <h3 className="text-sm font-bold flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-amber-400" />
-                  <span>Matriz de Permisos por Rol (RBAC)</span>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  Usuarios Registrados en el Sistema ({users.length})
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Reglas activas de control de acceso aplicadas en la interfaz y visor
+                  Usa el botón "Probar este rol" para simular la vista del usuario inmediatamente
                 </p>
               </div>
               <button
                 onClick={() => setShowAddUserModal(true)}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors shadow-sm shrink-0 self-start sm:self-auto"
               >
-                <UserPlus className="w-3.5 h-3.5" />
+                <UserPlus className="w-4 h-4" />
                 <span>Nuevo Usuario</span>
               </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
-                    <th className="py-2 px-3">Rol</th>
-                    <th className="py-2 px-3 text-center">Buscar PDFs</th>
-                    <th className="py-2 px-3 text-center">Visualizar</th>
-                    <th className="py-2 px-3 text-center">Identificar Personas</th>
-                    <th className="py-2 px-3 text-center">Descargar</th>
-                    <th className="py-2 px-3 text-center">Alojar / Subir</th>
-                    <th className="py-2 px-3 text-center">Eliminar</th>
-                    <th className="py-2 px-3 text-center">Gestión Usuarios</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-300">
-                  <tr>
-                    <td className="py-2.5 px-3 font-semibold text-purple-300">Super Admin</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400 font-semibold">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 font-semibold text-blue-300">Administrador</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400 font-semibold">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 font-semibold text-emerald-300">Editor</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400 font-semibold">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">✗ Bloqueado</td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">✗ Bloqueado</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 font-semibold text-amber-300">Lector (Viewer)</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-emerald-400 font-semibold">✓ Permitido</td>
-                    <td className="py-2.5 px-3 text-center text-rose-400 font-medium">✗ Bloqueado</td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">✗ Bloqueado</td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">✗ Bloqueado</td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">✗ Bloqueado</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* User List Table */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Usuarios Registrados en el Sistema ({users.length})
-              </h3>
-              <p className="text-xs text-slate-400">
-                Usa el botón "Probar este rol" para simular la vista del usuario inmediatamente
-              </p>
             </div>
 
             <div className="overflow-x-auto">
@@ -1075,7 +874,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                         <td className="py-3 px-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
+                            <div className="w-7 h-7 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
                               {u.name.charAt(0)}
                             </div>
                             <div>
@@ -1788,350 +1587,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
       )}
-      {activeSubTab === 'audit' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-          
-          {/* Header & Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <FileCheck className="w-4 h-4 text-emerald-500" />
-                <span>Registro Integral de Auditoría & Trazabilidad</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Historial cronológico de búsquedas, aperturas de documentos, descargas e intentos de acceso guardados en servidor
-              </p>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <button
-                id="btn-run-system-audit"
-                onClick={runSystemAudit}
-                disabled={isRunningSystemAudit}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
-                title="Ejecutar diagnóstico integral de bases de datos y seguridad"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRunningSystemAudit ? 'animate-spin' : ''}`} />
-                <span>{isRunningSystemAudit ? 'Auditando...' : 'Auditar Sistema'}</span>
-              </button>
-
-              <button
-                id="btn-export-audit"
-                onClick={() => {
-                  const exportText = filteredLogs.map((l) => `[${formatDate(l.timestamp)}] [${l.action}] [${l.userRole.toUpperCase()}] ${l.userName}: ${l.details} (Estado: ${l.status})`).join('\n');
-                  if (navigator.clipboard) {
-                    navigator.clipboard.writeText(exportText);
-                    setAuditExportCopied(true);
-                    setTimeout(() => setAuditExportCopied(false), 2500);
-                  }
-                }}
-                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-                title="Copiar informe de auditoría al portapapeles"
-              >
-                {auditExportCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{auditExportCopied ? 'Copiado' : 'Exportar Registro'}</span>
-              </button>
-
-              <select
-                value={auditActionFilter}
-                onChange={(e) => setAuditActionFilter(e.target.value as any)}
-                className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
-              >
-                <option value="all">Todas las acciones</option>
-                <option value="SEARCH">🔍 Solo Consultas / Búsquedas</option>
-                <option value="VIEW">👁️ Visualizaciones</option>
-                <option value="UPLOAD">📤 Subidas de archivo</option>
-                <option value="AUTH">🔒 Autenticación & Seguridad</option>
-              </select>
-
-              <div className="relative flex-1 sm:w-64">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={auditFilter}
-                  onChange={(e) => setAuditFilter(e.target.value)}
-                  placeholder="Filtrar por texto..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
-                />
-                {auditFilter && (
-                  <button
-                    onClick={() => setAuditFilter('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Real-time System Diagnostic Audit Card */}
-          {systemAuditReport && (
-            <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/30 text-white space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    Diagnóstico de Integridad Policial: {systemAuditReport.status}
-                  </span>
-                </div>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {formatDate(systemAuditReport.timestamp)}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
-                  <div className="text-[10px] text-slate-400 font-medium">BBDD Medidas Judiciales</div>
-                  <div className="text-base font-bold text-white mt-0.5">
-                    {systemAuditReport.databaseIntegrity?.measures?.total || 0}
-                  </div>
-                  <div className="text-[10px] text-emerald-400">100% íntegras y válidas</div>
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
-                  <div className="text-[10px] text-slate-400 font-medium">BBDD Identificaciones</div>
-                  <div className="text-base font-bold text-white mt-0.5">
-                    {systemAuditReport.databaseIntegrity?.identifications?.total || 0}
-                  </div>
-                  <div className="text-[10px] text-blue-400">Padrón verificado</div>
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
-                  <div className="text-[10px] text-slate-400 font-medium">Usuarios & Seguridad RBAC</div>
-                  <div className="text-base font-bold text-white mt-0.5">
-                    {systemAuditReport.databaseIntegrity?.users?.total || 0}
-                  </div>
-                  <div className="text-[10px] text-purple-400">Superadmin presente</div>
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60">
-                  <div className="text-[10px] text-slate-400 font-medium">Logs de Auditoría Servidor</div>
-                  <div className="text-base font-bold text-white mt-0.5">
-                    {systemAuditReport.databaseIntegrity?.auditLogs?.total || 0}
-                  </div>
-                  <div className="text-[10px] text-emerald-400">Persistencia activa</div>
-                </div>
-              </div>
-
-              <div className="text-[11px] text-slate-300 flex items-center gap-1.5 pt-1 border-t border-slate-800">
-                <BadgeCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>{systemAuditReport.securityVerdict?.summary || 'Integridad verificada con éxito.'}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-100 dark:border-slate-800 text-[11px] uppercase tracking-wider">
-                  <th className="py-2 px-3">Fecha y Hora</th>
-                  <th className="py-2 px-3">Usuario & Rol</th>
-                  <th className="py-2 px-3">Acción</th>
-                  <th className="py-2 px-3">Detalle del Evento</th>
-                  <th className="py-2 px-3 text-right">Resultado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px]">
-                      {formatDate(log.timestamp)}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">{log.userName}</div>
-                      <div className="text-[10px] text-slate-400 uppercase tracking-wider">{log.userRole}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-300">
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300 max-w-md">
-                      {log.details}
-                      {log.targetFileName && (
-                        <div className="text-blue-500 font-mono text-[11px] mt-0.5 truncate">
-                          📄 {log.targetFileName}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          log.status === 'SUCCESS'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                        }`}
-                      >
-                        {log.status === 'SUCCESS' ? 'PERMITIDO' : 'DENEGADO'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: CONFIGURACIÓN DE ALMACENAMIENTO EN SERVIDOR POLICIAL */}
-      {(activeSubTab === 'storage' || activeSubTab === 'drive') && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Main Server Storage Card */}
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                  <Server className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Almacenamiento Local en Servidor Policial
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Los archivos PDF de los oficios se guardan exclusivamente en el disco del servidor interno
-                  </p>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Servidor Policial Activo (Sin Google Drive)</span>
-              </span>
-            </div>
-
-            <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300">
-              
-              {/* Notice: Deprecated Google Drive */}
-              <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 rounded-xl text-xs space-y-1.5">
-                <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 text-xs">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  Almacenamiento 100% Autónomo y Confidencial
-                </span>
-                <p className="text-emerald-900/80 dark:text-emerald-300/90 text-[11.5px] leading-relaxed">
-                  Se ha eliminado la opción anterior de guardar documentos en carpetas externas de Google Drive. Todos los oficios judiciales, resoluciones y documentos en formato PDF se reciben, alojan y custodian directamente en el servidor local de la Comisaría de Minoridad y Violencia Familiar, garantizando soberanía operativa e inviolabilidad de datos.
-                </p>
-              </div>
-
-              {/* Technical Specifications of Storage */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-3">
-                <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
-                  <HardDrive className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Configuración de Almacenamiento Interno</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                    <span className="text-slate-400 text-[10.5px] block">Ruta física en el servidor:</span>
-                    <span className="font-mono text-slate-800 dark:text-slate-200 font-semibold text-[11px] block mt-0.5">
-                      /uploads/pdfs/
-                    </span>
-                    <span className="text-[10px] text-slate-400 mt-1 block">Almacenamiento local persistente</span>
-                  </div>
-
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                    <span className="text-slate-400 text-[10.5px] block">Punto de servicio API:</span>
-                    <span className="font-mono text-slate-800 dark:text-slate-200 font-semibold text-[11px] block mt-0.5">
-                      POST /api/upload-pdf
-                    </span>
-                    <span className="text-[10px] text-slate-400 mt-1 block">Carga directa multipart/form-data</span>
-                  </div>
-
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                    <span className="text-slate-400 text-[10.5px] block">Medidas con PDF alojado:</span>
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block mt-0.5">
-                      {(measures || []).filter(m => m.hasCustomPdf).length} de {(measures || []).length} registros
-                    </span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 block">Disponibles para visor y descarga</span>
-                  </div>
-
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                    <span className="text-slate-400 text-[10.5px] block">Formato admitido:</span>
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-xs block mt-0.5">
-                      Archivos PDF oficiales (.pdf)
-                    </span>
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">Límite por oficio: hasta 50 MB</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status summary banner */}
-              <div className="flex items-center justify-between p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl text-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span className="font-semibold text-blue-900 dark:text-blue-200">
-                    El sistema está configurado y funcionando 100% en el servidor policial
-                  </span>
-                </div>
-                <span className="font-mono text-[11px] text-blue-700 dark:text-blue-300 font-medium">
-                  Directorio /uploads/pdfs
-                </span>
-              </div>
-
-              {/* Sync and Check Physical PDFs Action */}
-              <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                <div>
-                  <h5 className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 text-xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Verificación de Oficios en Disco del Servidor</span>
-                  </h5>
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
-                    Garantiza que todas las medidas judiciales tengan su archivo PDF oficial guardado en <code className="font-mono bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded">/uploads/pdfs/</code>.
-                  </p>
-                  {syncPdfFeedback && (
-                    <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 mt-1.5 bg-white/80 dark:bg-slate-900/80 p-2 rounded-lg border border-emerald-300 dark:border-emerald-800">
-                      {syncPdfFeedback}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={handleSyncMeasurePdfs}
-                  disabled={isSyncingPdfs}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPdfs ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingPdfs ? 'Verificando...' : 'Sincronizar PDFs en Servidor'}</span>
-                </button>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Quick Diagnostics & Info */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-indigo-500" />
-              <span>Garantías del Servidor</span>
-            </h3>
-
-            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400">
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl">
-                <span className="font-bold text-blue-700 dark:text-blue-300 block mb-1">
-                  1. Almacenamiento Local Exclusivo
-                </span>
-                Los archivos quedan custodiados en el disco local del servidor, garantizando que ninguna información judicial sensible salga de la jurisdicción de la institución.
-              </div>
-
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-xl">
-                <span className="font-bold text-emerald-700 dark:text-emerald-300 block mb-1">
-                  2. Visualizador Integrado Seguro
-                </span>
-                Los documentos PDF se visualizan en el visor seguro integrado en el sistema policial, sin depender de visores de Google ni navegadores externos.
-              </div>
-
-              <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-xl">
-                <span className="font-bold text-purple-700 dark:text-purple-300 block mb-1">
-                  3. Control de Descargas RBAC
-                </span>
-                Los usuarios con rol "Lector" tienen restringida la descarga binaria de los documentos para evitar fugas de información.
-              </div>
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* TAB 5: COPIA DE SEGURIDAD Y RESTAURACIÓN DEL SISTEMA */}
+      {/* SUBTAB: COPIA DE SEGURIDAD Y RESTAURACIÓN DEL SISTEMA */}
       {activeSubTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in">
           

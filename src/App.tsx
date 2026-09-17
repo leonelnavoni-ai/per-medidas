@@ -1427,8 +1427,8 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. ADMIN & AUDIT PANEL VIEW */}
-        {(currentTab === 'admin' || currentTab === 'audit') && (
+        {/* 3. ADMIN PANEL VIEW */}
+        {currentTab === 'admin' && (
           <AdminPanel
             users={users}
             setUsers={updateUsersState}
@@ -1447,7 +1447,7 @@ export default function App() {
               }))
             }
             onAddAuditLog={addAuditLog}
-            initialSubTab={currentTab === 'audit' ? 'audit' : 'users'}
+            initialSubTab="users"
             measures={measures}
             identifications={identifications}
             onRestoreMeasures={setMeasures}
