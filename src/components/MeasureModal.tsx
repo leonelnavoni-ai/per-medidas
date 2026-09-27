@@ -37,6 +37,7 @@ import {
   calculateDaysDiff,
   formatFriendlySpanishDate,
 } from '../utils/dateCalculations';
+import { geocodeVictoriaAddress } from '../utils/geoUtils';
 
 interface MeasureModalProps {
   isOpen: boolean;
@@ -110,7 +111,16 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
 
   useEffect(() => {
     if (initialMeasure && mode === 'edit') {
-      setFormData({ ...initialMeasure });
+      const cleanCity = initialMeasure.ciudadVictima && initialMeasure.ciudadVictima !== 'Paraná' && initialMeasure.ciudadVictima !== 'Concordia'
+        ? initialMeasure.ciudadVictima
+        : 'Victoria';
+      setFormData({
+        ...initialMeasure,
+        ciudadVictima: cleanCity,
+        radioExclusionMetros: initialMeasure.radioExclusionMetros || 200,
+        domicilioVictima: initialMeasure.domicilioVictima || '',
+        domicilioVictimario: initialMeasure.domicilioVictimario || '',
+      });
       const isCausa =
         initialMeasure.fechaHasta?.toUpperCase().includes('DURACION') ||
         initialMeasure.fechaHasta?.toUpperCase().includes('FINALIZAR') ||
@@ -159,6 +169,10 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
         diasVigencia: 90,
         medidaReciproca: 'No',
         observaciones: '',
+        domicilioVictima: '',
+        ciudadVictima: 'Victoria',
+        radioExclusionMetros: 200,
+        domicilioVictimario: '',
       });
       setIsDuracionCausa(false);
       setAttachedFile(null);
@@ -338,6 +352,10 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
 
     setIsSaving(true);
     try {
+      const cityToSave = formData.ciudadVictima?.trim() || 'Victoria';
+      const addressToSave = formData.domicilioVictima?.trim();
+      const coords = addressToSave ? geocodeVictoriaAddress(addressToSave, cityToSave) : undefined;
+
       const measureToSave: JudicialMeasure = {
         id: formData.id || `med-${Date.now()}`,
         timestamp: formData.timestamp || new Date().toLocaleString(),
@@ -351,6 +369,12 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
         diasVigencia: isDuracionCausa ? undefined : (typeof daysCount === 'number' && daysCount >= 0 ? daysCount : undefined),
         medidaReciproca: formData.medidaReciproca === 'Si' ? 'Si' : 'No',
         observaciones: formData.observaciones?.trim(),
+        domicilioVictima: addressToSave,
+        ciudadVictima: cityToSave,
+        radioExclusionMetros: Number(formData.radioExclusionMetros) || 200,
+        domicilioVictimario: formData.domicilioVictimario?.trim(),
+        latVictima: coords?.lat ?? formData.latVictima,
+        lngVictima: coords?.lng ?? formData.lngVictima,
         isOfficialRegistry: true,
         lastUpdated: new Date().toLocaleString(),
       };
@@ -575,22 +599,53 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
                   type="text"
                   value={formData.domicilioVictima || ''}
                   onChange={(e) => setFormData({ ...formData, domicilioVictima: e.target.value })}
-                  placeholder="Ej. San Martín 450, o Barrio Paraná I Mza 3 Casa 12"
+                  placeholder="Ej. San Martín 450, Bv. Eva Perón o B° Quinto Cuartel"
                   className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Ciudad / Localidad:
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Ciudad / Localidad:
+                  </label>
+                  {(formData.ciudadVictima || 'Victoria') !== 'Victoria' && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, ciudadVictima: 'Victoria' })}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Restablecer Victoria
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
-                  value={formData.ciudadVictima || 'Paraná'}
+                  value={formData.ciudadVictima ?? ''}
                   onChange={(e) => setFormData({ ...formData, ciudadVictima: e.target.value })}
-                  placeholder="Paraná"
+                  placeholder="Victoria"
                   className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {/* Localidades del Departamento Victoria */}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {['Victoria', 'Rincón del Doll', 'Molino Doll', 'Antelo', 'Laguna del Pescado'].map((locName) => {
+                    const isSelected = (formData.ciudadVictima || 'Victoria').toLowerCase() === locName.toLowerCase();
+                    return (
+                      <button
+                        key={locName}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, ciudadVictima: locName })}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white font-bold'
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                        }`}
+                      >
+                        {locName}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>

@@ -37,13 +37,13 @@ interface PoliceMemosTabProps {
   onClearInitialMeasure?: () => void;
 }
 
-// 17 Jefaturas Departamentales oficiales de la Policía de Entre Ríos
+// 17 Jefaturas Departamentales oficiales de la Policía de Entre Ríos (Victoria predeterminada)
 export const DEPARTAMENTALES_PER = [
+  'Jefatura Departamental Victoria',
   'Jefatura Departamental Paraná',
   'Jefatura Departamental Concordia',
   'Jefatura Departamental Gualeguaychú',
   'Jefatura Departamental Uruguay',
-  'Jefatura Departamental Victoria',
   'Jefatura Departamental Colón',
   'Jefatura Departamental Gualeguay',
   'Jefatura Departamental Villaguay',
@@ -213,7 +213,9 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
 
   // JEFATURA DEPARTAMENTAL FIJADA (Persistente)
   const [departamental, setDepartamental] = useState<string>(() => {
-    return localStorage.getItem('per_fixed_departamental') || 'Jefatura Departamental Paraná';
+    const saved = localStorage.getItem('per_fixed_departamental');
+    if (saved && saved !== 'Jefatura Departamental Paraná') return saved;
+    return 'Jefatura Departamental Victoria';
   });
 
   // DEPENDENCIA / COMISARÍA FIJADA (Persistente)
@@ -248,7 +250,9 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
 
   // Ciudad predeterminada (Persistente)
   const [ciudadComision, setCiudadComision] = useState<string>(() => {
-    return localStorage.getItem('per_fixed_ciudad') || 'Paraná';
+    const saved = localStorage.getItem('per_fixed_ciudad');
+    if (saved && saved !== 'Paraná' && saved !== 'Concordia') return saved;
+    return 'Victoria';
   });
 
   // Móvil policial predeterminado (Persistente)
@@ -956,7 +960,7 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                     type="text"
                     value={ciudadComision}
                     onChange={(e) => setCiudadComision(e.target.value)}
-                    placeholder="Paraná"
+                    placeholder="Victoria"
                     className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
                   />
                 </div>
@@ -1688,7 +1692,7 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                           const blob = generatePoliceMemoPdfBlob({
                             numeroMemo: memo.numeroMemo,
                             fechaHora: new Date(memo.fechaHora).toLocaleString('es-AR'),
-                            departamental: memo.jefatura || 'Jefatura Departamental Paraná',
+                            departamental: memo.jefatura || 'Jefatura Departamental Victoria',
                             dependencia: memo.dependencia,
                             oficialACargo: memo.oficialACargo,
                             movilPolicial: memo.movilPolicial,

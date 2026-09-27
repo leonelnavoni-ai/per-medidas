@@ -119,7 +119,7 @@ export interface PoliceMemo {
   id: string;
   numeroMemo: string; // Ej: "MEMO N° 084/2026 - D.M.V.F."
   fechaHora: string;
-  dependencia: string; // Ej: "División Minoridad y Violencia Familiar - Jefatura Dptal. Paraná"
+  dependencia: string; // Ej: "División Minoridad y Violencia Familiar - Jefatura Dptal. Victoria"
   jefatura: string; // Ej: "Policía de Entre Ríos"
   tipoComision: TipoComisionPolicial;
   measureId?: string;

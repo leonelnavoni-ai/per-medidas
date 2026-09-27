@@ -142,7 +142,7 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
       },
       (err) => {
         console.warn('Geolocation error:', err);
-        setGpsError('No se pudo obtener la posición GPS exacta. Usando ubicación base de Jefatura Paraná.');
+        setGpsError('No se pudo obtener la posición GPS exacta. Usando ubicación base de Jefatura Departamental Victoria.');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );

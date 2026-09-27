@@ -94,16 +94,48 @@ export default function App() {
     setCurrentTab('memos');
   };
 
+  // Helper to ensure all measures belong strictly to Victoria, Entre Ríos and reset stale Paraná/Concordia references
+  const sanitizeMeasuresToVictoria = (list: JudicialMeasure[]): JudicialMeasure[] => {
+    return list.map((m) => {
+      let changed = false;
+      let city = m.ciudadVictima;
+      let lat = m.latVictima;
+      let lng = m.lngVictima;
+
+      if (!city || city === 'Paraná' || city === 'Concordia') {
+        city = 'Victoria';
+        changed = true;
+      }
+
+      // Reset coordinates if outside Victoria department
+      if (lat && (lat > -32.3 || lat < -32.9 || !lng || lng > -59.7 || lng < -60.45)) {
+        lat = undefined;
+        lng = undefined;
+        changed = true;
+      }
+
+      if (changed) {
+        return {
+          ...m,
+          ciudadVictima: city,
+          latVictima: lat,
+          lngVictima: lng,
+        };
+      }
+      return m;
+    });
+  };
+
   // Default Judicial Measures State (Stored on Web Server Database)
   const [measures, setMeasures] = useState<JudicialMeasure[]>(() => {
     try {
       const cached = localStorage.getItem('police_app_measures_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return sanitizeMeasuresToVictoria(parsed);
       }
     } catch (e) {}
-    return DEFAULT_JUDICIAL_MEASURES;
+    return sanitizeMeasuresToVictoria(DEFAULT_JUDICIAL_MEASURES);
   });
 
   // Measure Modal State
@@ -117,7 +149,11 @@ export default function App() {
       const cached = localStorage.getItem('police_app_persons_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Exclude any legacy sample identifications (ident-1, ident-2, ident-3, ident-4)
+          const clean = parsed.filter((p: any) => !['ident-1', 'ident-2', 'ident-3', 'ident-4'].includes(p.id));
+          return clean;
+        }
       }
     } catch (e) {}
     return INITIAL_IDENTIFIED_PERSONS;
@@ -145,7 +181,11 @@ export default function App() {
       const cached = localStorage.getItem('police_app_users_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Exclude legacy mock users
+          const clean = parsed.filter((u: any) => !['usr-2', 'usr-3', 'usr-4', 'usr-5'].includes(u.id));
+          if (clean.length > 0) return clean;
+        }
       }
     } catch (e) {}
     return INITIAL_USERS;
@@ -230,7 +270,7 @@ export default function App() {
       }
       if (Array.isArray(serverMeasures) && serverMeasures.length > 0) {
         if (Date.now() - lastMeasureEditTimeRef.current > 7000) {
-          setMeasures(serverMeasures);
+          setMeasures(sanitizeMeasuresToVictoria(serverMeasures));
         }
         hasLiveResponse = true;
       }
@@ -350,7 +390,10 @@ export default function App() {
       const cached = localStorage.getItem('police_app_audit_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clean = parsed.filter((l: any) => !l.id?.startsWith('log-query-') && !l.id?.startsWith('test-log-'));
+          if (clean.length > 0) return clean;
+        }
       }
     } catch (e) {}
     return INITIAL_AUDIT_LOGS;
@@ -786,9 +829,10 @@ export default function App() {
   // State update helper for Judicial Measures with direct web server persistence
   const updateMeasuresState = (newMeasures: JudicialMeasure[]) => {
     lastMeasureEditTimeRef.current = Date.now();
-    setMeasures(newMeasures);
+    const sanitized = sanitizeMeasuresToVictoria(newMeasures);
+    setMeasures(sanitized);
     // Persist directly to web server database
-    ApiService.saveMeasures(newMeasures).catch((err) =>
+    ApiService.saveMeasures(sanitized).catch((err) =>
       console.warn('Error al guardar medidas en el servidor:', err)
     );
   };
