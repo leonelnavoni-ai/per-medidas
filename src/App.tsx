@@ -43,7 +43,7 @@ import { INITIAL_IDENTIFIED_PERSONS } from './data/initialIdentifications';
 import { generateSamplePdfBlob, generateJudicialMeasurePdfBlob } from './utils/pdfGenerator';
 import { measureToDriveFile, fileToBase64, base64ToBlob } from './utils/measureUtils';
 import { DriveService } from './services/driveService';
-import { Header } from './components/Header';
+import { Header, AppTabType } from './components/Header';
 import { SearchBarAndFilters } from './components/SearchBarAndFilters';
 import { DocumentCard } from './components/DocumentCard';
 import { PdfViewerModal } from './components/PdfViewerModal';
@@ -56,11 +56,43 @@ import { LoginScreen } from './components/LoginScreen';
 import { PersonIdentificationExplorer } from './components/PersonIdentificationExplorer';
 import { PersonIdentificationModal } from './components/PersonIdentificationModal';
 import { PersonWhatsAppModal } from './components/PersonWhatsAppModal';
+import { OperationalMapTab } from './components/OperationalMapTab';
+import { PoliceMemosTab } from './components/PoliceMemosTab';
+import { GeoLocation } from './utils/geoUtils';
 import { ApiService } from './services/apiService';
 
 export default function App() {
   // Navigation
-  const [currentTab, setCurrentTab] = useState<'measures' | 'identifications' | 'files' | 'admin' | 'audit'>('measures');
+  const [currentTab, setCurrentTab] = useState<AppTabType>('measures');
+  const [initialMapMeasure, setInitialMapMeasure] = useState<JudicialMeasure | null>(null);
+  const [initialMemoMeasure, setInitialMemoMeasure] = useState<JudicialMeasure | null>(null);
+  const [userLocation, setUserLocation] = useState<GeoLocation | null>(null);
+
+  // User GPS Geolocation Watcher
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, []);
+
+  const handleOpenMapForMeasure = (m: JudicialMeasure) => {
+    setInitialMapMeasure(m);
+    setCurrentTab('map');
+  };
+
+  const handleOpenPoliceMemoForMeasure = (m: JudicialMeasure) => {
+    setInitialMemoMeasure(m);
+    setCurrentTab('memos');
+  };
 
   // Default Judicial Measures State (Stored on Web Server Database)
   const [measures, setMeasures] = useState<JudicialMeasure[]>(() => {
@@ -1338,6 +1370,33 @@ export default function App() {
             onOpenEdit={handleOpenEditMeasure}
             onDeleteMeasure={handleDeleteMeasure}
             onBulkDeleteExpired={handleBulkDeleteExpiredMeasures}
+            onOpenMapTab={handleOpenMapForMeasure}
+            onOpenPoliceMemo={handleOpenPoliceMemoForMeasure}
+            userLocation={userLocation}
+          />
+        )}
+
+        {/* 2. MAPA OPERATIVO & GEOLOCALIZACIÓN GPS VIEW */}
+        {currentTab === 'map' && (
+          <OperationalMapTab
+            measures={measures}
+            currentUser={currentUser}
+            onViewPdf={handleViewMeasurePdf}
+            onOpenPoliceMemo={handleOpenPoliceMemoForMeasure}
+            initialSelectedMeasureId={initialMapMeasure?.id}
+            initialSelectedMeasure={initialMapMeasure}
+            userLocation={userLocation}
+            onBackToMeasures={() => setCurrentTab('measures')}
+          />
+        )}
+
+        {/* 3. MEMOS Y PARTES POLICIALES DE COMISIÓN (POLICÍA DE ENTRE RÍOS) */}
+        {currentTab === 'memos' && (
+          <PoliceMemosTab
+            measures={measures}
+            currentUser={currentUser}
+            initialMeasure={initialMemoMeasure}
+            onClearInitialMeasure={() => setInitialMemoMeasure(null)}
           />
         )}
 

@@ -10,13 +10,18 @@ import {
   LogOut,
   UserCheck,
   RefreshCw,
+  MapPin,
+  Compass,
+  Navigation,
 } from 'lucide-react';
 import { UserProfile, DriveConnectionState, PermissionSet } from '../types';
 import { PoliceLogo } from './PoliceLogo';
 
+export type AppTabType = 'measures' | 'map' | 'memos' | 'identifications' | 'files' | 'admin' | 'audit';
+
 interface HeaderProps {
-  currentTab: 'measures' | 'identifications' | 'files' | 'admin' | 'audit';
-  setCurrentTab: (tab: 'measures' | 'identifications' | 'files' | 'admin' | 'audit') => void;
+  currentTab: AppTabType;
+  setCurrentTab: (tab: AppTabType) => void;
   currentUser: UserProfile;
   allUsers?: UserProfile[];
   onSwitchUser?: (user: UserProfile) => void;
@@ -135,6 +140,34 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </button>
 
+            {/* Mapa Operativo & Rutas GPS */}
+            <button
+              id="nav-tab-map"
+              onClick={() => setCurrentTab('map')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                currentTab === 'map'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Compass className="w-4 h-4 text-amber-400" />
+              <span>Mapa Operativo</span>
+            </button>
+
+            {/* Memos Policiales (Comisiones PER) */}
+            <button
+              id="nav-tab-memos"
+              onClick={() => setCurrentTab('memos')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                currentTab === 'memos'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <FileText className="w-4 h-4 text-emerald-400" />
+              <span>Memos Policiales</span>
+            </button>
+
             {/* Identificación de Personas */}
             <button
               id="nav-tab-identifications"
@@ -146,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <UserCheck className="w-4 h-4" />
-              <span>Identificación de Personas</span>
+              <span>Identificaciones</span>
               {typeof identificationsCount === 'number' && (
                 <span className="text-xs bg-black/25 px-1.5 py-0.2 rounded-full font-mono">
                   {identificationsCount}
@@ -240,24 +273,42 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Mobile Navigation Bar */}
-        <div className="flex md:hidden items-center justify-around py-2 border-t border-slate-800 text-xs overflow-x-auto">
+        <div className="flex md:hidden items-center justify-around py-2 border-t border-slate-800 text-xs overflow-x-auto gap-1">
           <button
             onClick={() => setCurrentTab('measures')}
-            className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap ${
+            className={`px-2 py-1 rounded-md flex items-center gap-1 whitespace-nowrap text-[11px] ${
               currentTab === 'measures' ? 'bg-blue-600 text-white' : 'text-slate-400'
             }`}
           >
             <Shield className="w-3.5 h-3.5" />
-            <span>Medidas ({measuresCount})</span>
+            <span>Medidas</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('map')}
+            className={`px-2 py-1 rounded-md flex items-center gap-1 whitespace-nowrap text-[11px] ${
+              currentTab === 'map' ? 'bg-blue-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 text-amber-400" />
+            <span>Mapa</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('memos')}
+            className={`px-2 py-1 rounded-md flex items-center gap-1 whitespace-nowrap text-[11px] ${
+              currentTab === 'memos' ? 'bg-blue-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Memos</span>
           </button>
           <button
             onClick={() => setCurrentTab('identifications')}
-            className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap ${
+            className={`px-2 py-1 rounded-md flex items-center gap-1 whitespace-nowrap text-[11px] ${
               currentTab === 'identifications' ? 'bg-blue-600 text-white' : 'text-slate-400'
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>Identificaciones ({identificationsCount || 0})</span>
+            <span>Identificar</span>
           </button>
           {userPermissions.canManageUsers && (
             <button

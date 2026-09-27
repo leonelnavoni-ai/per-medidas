@@ -7,7 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { INITIAL_USERS, INITIAL_AUDIT_LOGS } from './src/data/initialData';
 import { DEFAULT_JUDICIAL_MEASURES } from './src/data/defaultMeasures';
 import { INITIAL_IDENTIFIED_PERSONS } from './src/data/initialIdentifications';
-import { UserProfile, JudicialMeasure, IdentifiedPerson, DriveFile, AuditLog } from './src/types';
+import { UserProfile, JudicialMeasure, IdentifiedPerson, DriveFile, AuditLog, PoliceMemo } from './src/types';
 
 const PORT = 3000;
 
@@ -29,6 +29,7 @@ const MEASURES_FILE = path.join(DATA_DIR, 'measures.json');
 const IDENTIFICATIONS_FILE = path.join(DATA_DIR, 'identifications.json');
 const DOCUMENTS_FILE = path.join(DATA_DIR, 'documents.json');
 const AUDIT_FILE = path.join(DATA_DIR, 'audit.json');
+const MEMOS_FILE = path.join(DATA_DIR, 'memos.json');
 
 // Helper to safely read JSON files with fallback
 function readJsonFile<T>(filePath: string, fallback: T): T {
@@ -67,6 +68,9 @@ if (!fs.existsSync(DOCUMENTS_FILE)) {
 }
 if (!fs.existsSync(AUDIT_FILE)) {
   writeJsonFile(AUDIT_FILE, INITIAL_AUDIT_LOGS);
+}
+if (!fs.existsSync(MEMOS_FILE)) {
+  writeJsonFile(MEMOS_FILE, []);
 }
 
 // Multer Storage Configuration for PDF Uploads
@@ -987,7 +991,123 @@ Q
     }
   });
 
-  // 10. Complete System Backup & Restore APIs
+  // 10. Police Memos API with Role-Based Access Control (RBAC)
+  // - Solo el funcionario que registró el memo y los administradores tienen acceso
+  app.get('/api/memos', (req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      const memos = readJsonFile<PoliceMemo[]>(MEMOS_FILE, []);
+      const { userId, role, legajo, name } = req.query as {
+        userId?: string;
+        role?: string;
+        legajo?: string;
+        name?: string;
+      };
+
+      const isAdmin = role === 'admin' || role === 'superadmin';
+
+      // Administradores y superadministradores: acceso total a todos los memos registrados
+      if (isAdmin || (!userId && !role)) {
+        res.json(memos);
+        return;
+      }
+
+      // Funcionarios / Operadores regulares: solo ven los memorándums que ellos mismos cargaron
+      const normName = name ? name.trim().toLowerCase() : '';
+      const normLegajo = legajo ? legajo.replace(/\D/g, '') : '';
+
+      const filtered = memos.filter((m) => {
+        // Coincidencia exacta por ID de usuario
+        if (m.creadoPorId && userId && m.creadoPorId === userId) return true;
+        // Coincidencia por legajo policial del creador
+        if (m.creadoPorLegajo && normLegajo && m.creadoPorLegajo.replace(/\D/g, '').includes(normLegajo)) return true;
+        if (m.legajo && normLegajo && m.legajo.replace(/\D/g, '').includes(normLegajo)) return true;
+        // Coincidencia por nombre completo del funcionario
+        if (m.creadoPor && normName && m.creadoPor.toLowerCase().includes(normName)) return true;
+        return false;
+      });
+
+      console.log(`[Memos RBAC] Consulta de memos por ${name || userId} (${role}): ${filtered.length} visibles de ${memos.length}`);
+      res.json(filtered);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Error al obtener memorándums policiales' });
+    }
+  });
+
+  app.post('/api/memos', (req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      const incoming = req.body;
+      const currentList = readJsonFile<PoliceMemo[]>(MEMOS_FILE, []);
+
+      if (Array.isArray(incoming)) {
+        writeJsonFile(MEMOS_FILE, incoming);
+        console.log(`[Memos] Lista completa de memorándums actualizada (${incoming.length} registros)`);
+        res.json(incoming);
+        return;
+      }
+
+      if (incoming && typeof incoming === 'object' && incoming.id) {
+        const index = currentList.findIndex((m) => m.id === incoming.id);
+        if (index >= 0) {
+          currentList[index] = { ...currentList[index], ...incoming };
+        } else {
+          currentList.unshift(incoming);
+        }
+        writeJsonFile(MEMOS_FILE, currentList);
+        console.log(`[Memos] Memorándum guardado en servidor: ${incoming.numeroMemo} por ${incoming.creadoPor || 'Funcionario'}`);
+        res.json(incoming);
+        return;
+      }
+
+      res.status(400).json({ error: 'Estructura de memorándum inválida' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Error al guardar memorándum en servidor' });
+    }
+  });
+
+  app.delete(['/api/memos/:id', '/api/memos'], (req, res) => {
+    try {
+      const id = req.params.id || (req.query.id as string) || req.body?.id;
+      const { userId, role } = (req.query.userId ? req.query : req.body) as { userId?: string; role?: string };
+
+      if (!id) {
+        res.status(400).json({ error: 'ID de memorándum requerido' });
+        return;
+      }
+
+      const currentList = readJsonFile<PoliceMemo[]>(MEMOS_FILE, []);
+      const targetMemo = currentList.find((m) => m.id === id);
+
+      if (!targetMemo) {
+        res.status(404).json({ error: 'Memorándum no encontrado en el servidor' });
+        return;
+      }
+
+      const isAdmin = role === 'admin' || role === 'superadmin';
+      const isOwner = targetMemo.creadoPorId && userId && targetMemo.creadoPorId === userId;
+
+      if (!isAdmin && !isOwner) {
+        res.status(403).json({ error: 'Permisos insuficientes: solo el funcionario que registró el memo o un administrador pueden eliminarlo.' });
+        return;
+      }
+
+      const filtered = currentList.filter((m) => m.id !== id);
+      writeJsonFile(MEMOS_FILE, filtered);
+      console.log(`[Memos] Memorándum eliminado en servidor: ${id}`);
+      res.json({ success: true, deletedId: id, remaining: filtered.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Error al eliminar memorándum' });
+    }
+  });
+
+  // 11. Complete System Backup & Restore APIs
   const handleBackupExport = (_req: express.Request, res: express.Response) => {
     try {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -999,6 +1119,7 @@ Q
       const identifications = readJsonFile<IdentifiedPerson[]>(IDENTIFICATIONS_FILE, INITIAL_IDENTIFIED_PERSONS);
       const documents = readJsonFile<DriveFile[]>(DOCUMENTS_FILE, []);
       const auditLogs = readJsonFile<AuditLog[]>(AUDIT_FILE, INITIAL_AUDIT_LOGS);
+      const memos = readJsonFile<PoliceMemo[]>(MEMOS_FILE, []);
 
       const backupPackage = {
         app: 'Policia Entre Rios - Comisaria de Minoridad y Violencia Familiar',
@@ -1011,6 +1132,7 @@ Q
           identifications,
           documents,
           auditLogs,
+          memos,
         },
         summary: {
           totalUsers: users.length,
@@ -1018,10 +1140,11 @@ Q
           totalIdentifications: identifications.length,
           totalDocuments: documents.length,
           totalAuditLogs: auditLogs.length,
+          totalMemos: memos.length,
         },
       };
 
-      console.log(`[Backup] Exportación de respaldo generada exitosamente (${measures.length} medidas, ${identifications.length} personas, ${users.length} usuarios)`);
+      console.log(`[Backup] Exportación de respaldo generada exitosamente (${measures.length} medidas, ${identifications.length} personas, ${memos.length} memos, ${users.length} usuarios)`);
       res.json(backupPackage);
     } catch (err: any) {
       console.error('[Backup] Error al exportar respaldo:', err);
@@ -1052,6 +1175,7 @@ Q
         identifications: 0,
         documents: 0,
         auditLogs: 0,
+        memos: 0,
       };
 
       // 1. Restore Users
@@ -1090,7 +1214,13 @@ Q
         restored.documents = payload.documents.length;
       }
 
-      // 5. Restore Audit Logs
+      // 5. Restore Police Memos
+      if (Array.isArray(payload.memos)) {
+        writeJsonFile(MEMOS_FILE, payload.memos);
+        restored.memos = payload.memos.length;
+      }
+
+      // 6. Restore Audit Logs
       if (Array.isArray(payload.auditLogs)) {
         const restoreLog: AuditLog = {
           id: `audit-restore-${Date.now()}`,
@@ -1099,7 +1229,7 @@ Q
           userName: 'Sistema de Respaldo',
           userRole: 'superadmin',
           action: 'UPDATE_PERMISSIONS',
-          details: `Restauración completa de base de datos desde copia de seguridad (${restored.measures} medidas, ${restored.identifications} personas, ${restored.users} usuarios)`,
+          details: `Restauración completa de base de datos desde copia de seguridad (${restored.measures} medidas, ${restored.identifications} personas, ${restored.users} usuarios, ${restored.memos || 0} memos)`,
           status: 'SUCCESS',
         };
         const mergedLogs = [restoreLog, ...payload.auditLogs].slice(0, 2000);

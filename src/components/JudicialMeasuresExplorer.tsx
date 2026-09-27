@@ -29,10 +29,15 @@ import {
   ChevronDown,
   ChevronUp,
   Archive,
+  MapPin,
+  Navigation,
+  Compass,
 } from 'lucide-react';
 import { JudicialMeasure, PermissionSet, UserProfile } from '../types';
 import { WhatsAppShareModal } from './WhatsAppShareModal';
+import { VictimLocationModal } from './VictimLocationModal';
 import { getMeasureExpirationInfo } from '../utils/dateCalculations';
+import { resolveMeasureLocation, GeoLocation } from '../utils/geoUtils';
 
 interface JudicialMeasuresExplorerProps {
   measures: JudicialMeasure[];
@@ -44,6 +49,9 @@ interface JudicialMeasuresExplorerProps {
   onOpenEdit: (measure: JudicialMeasure) => void;
   onDeleteMeasure?: (measure: JudicialMeasure) => void;
   onBulkDeleteExpired?: (measures: JudicialMeasure[]) => void;
+  onOpenMapTab?: (measure: JudicialMeasure) => void;
+  onOpenPoliceMemo?: (measure: JudicialMeasure) => void;
+  userLocation?: GeoLocation | null;
 }
 
 export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> = ({
@@ -56,8 +64,12 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
   onOpenEdit,
   onDeleteMeasure,
   onBulkDeleteExpired,
+  onOpenMapTab,
+  onOpenPoliceMemo,
+  userLocation = null,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [locationModalMeasure, setLocationModalMeasure] = useState<JudicialMeasure | null>(null);
   const [filterTipo, setFilterTipo] = useState('Todos');
   const [filterJuzgado, setFilterJuzgado] = useState('Todos');
   const [filterReciproca, setFilterReciproca] = useState('Todos');
@@ -929,6 +941,32 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
                         {/* Actions */}
                         <td className="py-3 px-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Ubicación y Ruta hacia la víctima en Mapa Operativo */}
+                            <button
+                              onClick={() => {
+                                if (onOpenMapTab) {
+                                  onOpenMapTab(m);
+                                } else {
+                                  setLocationModalMeasure(m);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
+                              title="Ver únicamente esta medida en el mapa operativo y trazar recorrido a la víctima"
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                            </button>
+
+                            {/* Generar Memo Policial */}
+                            {onOpenPoliceMemo && (
+                              <button
+                                onClick={() => onOpenPoliceMemo(m)}
+                                className="p-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer"
+                                title="Generar memo policial de comisión para esta medida"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              </button>
+                            )}
+
                             {/* Enviar datos de la medida y oficio por WhatsApp */}
                             <button
                               onClick={() => setWhatsAppMeasure(m)}
@@ -1118,10 +1156,20 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
 
                     <div className="mt-2.5 space-y-1.5 text-xs">
                       <div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Víctima</span>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Víctima & Domicilio Protegido</span>
                         <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">
                           {m.victima}
                         </p>
+                        {(() => {
+                          const loc = resolveMeasureLocation(m);
+                          return (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5" title="Domicilio protegido">
+                              <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                              <span className="truncate">{loc.direccion}, {loc.ciudad}</span>
+                              <span className="text-blue-500 font-mono text-[10px] shrink-0">({loc.radioMetros}m)</span>
+                            </p>
+                          );
+                        })()}
                       </div>
 
                       <div>
@@ -1147,8 +1195,8 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-1.5">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {m.medidaReciproca === 'Si' && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
                           Recíproca
@@ -1157,7 +1205,34 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
                       <span className="text-[11px] text-slate-400">{m.timestamp.split(' ')[0]}</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Botón Ubicación y Ruta hacia la Víctima (Solicitud directa del usuario: abre mapa operativo focalizado) */}
+                      <button
+                        onClick={() => {
+                          if (onOpenMapTab) {
+                            onOpenMapTab(m);
+                          } else {
+                            setLocationModalMeasure(m);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Ver únicamente esta medida en el mapa operativo y trazar el recorrido hacia el lugar de la víctima"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span>Ubicación y Ruta</span>
+                      </button>
+
+                      {/* Generar Memo de Comisión Policial */}
+                      {onOpenPoliceMemo && (
+                        <button
+                          onClick={() => onOpenPoliceMemo(m)}
+                          className="p-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer"
+                          title="Generar memo policial de comisión para esta medida"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        </button>
+                      )}
+
                       {/* Botón WhatsApp */}
                       <button
                         onClick={() => setWhatsAppMeasure(m)}
@@ -1254,6 +1329,18 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
         measure={whatsAppMeasure}
         currentUser={currentUser}
       />
+
+      {/* Modal de Ubicación y Ruta hacia la Víctima */}
+      {locationModalMeasure && (
+        <VictimLocationModal
+          isOpen={Boolean(locationModalMeasure)}
+          onClose={() => setLocationModalMeasure(null)}
+          measure={locationModalMeasure}
+          userLocation={userLocation}
+          onOpenPoliceMemo={onOpenPoliceMemo}
+          onOpenMapTab={onOpenMapTab}
+        />
+      )}
     </div>
   );
 };

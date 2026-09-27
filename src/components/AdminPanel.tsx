@@ -856,7 +856,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <th className="py-2.5 px-3">Correo</th>
                     <th className="py-2.5 px-3">Credencial (Contraseña)</th>
                     <th className="py-2.5 px-3">Rol Asignado</th>
-                    <th className="py-2.5 px-3">Permisos</th>
                     <th className="py-2.5 px-3">Estado</th>
                     <th className="py-2.5 px-3">Último Acceso</th>
                     <th className="py-2.5 px-3 text-right">Acciones</th>
@@ -970,19 +969,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <option value="editor">Editor</option>
                             <option value="viewer">Lector (Solo vista)</option>
                           </select>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          {hasCustom ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-semibold" title="Este usuario tiene permisos personalizados asignados">
-                              <Sliders className="w-3 h-3" />
-                              <span>Personalizados</span>
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Estándar del Rol
-                            </span>
-                          )}
                         </td>
 
                         <td className="py-3 px-3">
@@ -2246,115 +2232,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </select>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Sección 2: Asignación Granular de Permisos */}
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-700/60">
-                  <div>
-                    <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Asignación Individual de Permisos (RBAC)</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Marca las casillas para otorgar o revocar permisos específicos a este usuario
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleResetToRoleDefaults}
-                    className="self-start sm:self-auto text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>Restablecer a valores del rol</span>
-                  </button>
-                </div>
-
-                {/* Switch para activar permisos personalizados */}
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useCustomPermissions}
-                      onChange={(e) => setUseCustomPermissions(e.target.checked)}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <div>
-                      <span className="font-bold text-blue-900 dark:text-blue-200">
-                        Personalizar permisos independientes para este usuario
-                      </span>
-                      <span className="block text-[11px] text-blue-700/80 dark:text-blue-300/80">
-                        {useCustomPermissions
-                          ? 'Los permisos configurados abajo sobrescribirán los permisos estándar del rol.'
-                          : 'El usuario actualmente hereda los permisos estándar de su rol.'}
-                      </span>
-                    </div>
-                  </label>
-
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    useCustomPermissions 
-                      ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-700' 
-                      : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
-                  }`}>
-                    {useCustomPermissions ? 'Personalizado' : 'Por Rol'}
-                  </span>
-                </div>
-
-                {/* Grid de los permisos granulares */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  {[
-                    { key: 'canSearch' as keyof PermissionSet, label: 'Buscar Medidas y Registros', desc: 'Permite buscar expedientes y oficios en el sistema' },
-                    { key: 'canView' as keyof PermissionSet, label: 'Visualizar Documentos y PDFs', desc: 'Permite abrir y ver medidas y archivos en el visor integrado' },
-                    { key: 'canIdentifyPerson' as keyof PermissionSet, label: 'Identificar Personas', desc: 'Permite registrar e identificar ciudadanos en controles policiales' },
-                    { key: 'canDownload' as keyof PermissionSet, label: 'Descargar Archivos PDF', desc: 'Habilita la descarga local de archivos PDF' },
-                    { key: 'canUpload' as keyof PermissionSet, label: 'Cargar Medidas y Subir PDFs', desc: 'Permite registrar nuevas medidas de protección y subir archivos' },
-                    { key: 'canEdit' as keyof PermissionSet, label: 'Editar Datos de Medidas', desc: 'Habilita modificar oficios, vencimientos y estados' },
-                    { key: 'canDelete' as keyof PermissionSet, label: 'Eliminar Medidas Judiciales', desc: 'Permite suprimir registros del libro de medidas' },
-                    { key: 'canManageUsers' as keyof PermissionSet, label: 'Administrar Usuarios y Permisos', desc: 'Acceso a este panel administrativo de usuarios y roles' },
-                    { key: 'canConfigureDrive' as keyof PermissionSet, label: 'Configurar Google Drive', desc: 'Permite modificar las carpetas del repositorio central' },
-                    { key: 'canViewAuditLogs' as keyof PermissionSet, label: 'Ver Auditoría y Trazabilidad', desc: 'Acceso a registros de auditoría y accesos de usuarios' },
-                  ].map((perm) => {
-                    const isChecked = editPermissions[perm.key];
-                    return (
-                      <div
-                        key={perm.key}
-                        onClick={() => handleTogglePermission(perm.key)}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
-                          isChecked
-                            ? 'bg-emerald-50/80 dark:bg-emerald-950/25 border-emerald-300 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-200'
-                            : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleTogglePermission(perm.key)}
-                          className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className={`font-semibold text-xs ${isChecked ? 'text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>
-                              {perm.label}
-                            </span>
-                            {isChecked ? (
-                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                Concedido
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400">
-                                Denegado
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
-                            {perm.desc}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
 

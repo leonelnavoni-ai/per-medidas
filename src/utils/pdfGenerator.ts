@@ -361,3 +361,223 @@ ${streamLength + 400}
 
   return new Blob([pdfBody], { type: 'application/pdf' });
 }
+
+export interface PoliceMemoPdfData {
+  numeroMemo: string;
+  fechaHora: string;
+  departamental: string;
+  dependencia: string;
+  oficialACargo: string;
+  movilPolicial: string;
+  victima: string;
+  victimario: string;
+  nroOficio?: string;
+  juzgadoInterviniente?: string;
+  domicilioComision: string;
+  ciudadComision: string;
+  tipoComisionTitulo: string;
+  motivoComision: string;
+  relatoHechos: string;
+  resultadoIntervencion: string;
+  observaciones?: string;
+  jerarquia?: string;
+  nombre?: string;
+  legajo?: string;
+}
+
+/**
+ * Generates an official Police Memo PDF document (Parte de Comisión Policial)
+ * with the exact chosen Departamental, Dependencia, Officer, and Narrative.
+ */
+export function generatePoliceMemoPdfBlob(data: PoliceMemoPdfData): Blob {
+  const sanitize = (txt: string = '') =>
+    txt
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)');
+
+  const escapePdfText = (txt: string) => sanitize(txt);
+
+  const linesOfRelato = escapePdfText(data.relatoHechos)
+    .match(/.{1,78}(\s|$)/g) || [escapePdfText(data.relatoHechos).slice(0, 78)];
+
+  const contentStream = `
+q
+0.08 0.15 0.3 rg
+40 760 515 45 re
+f
+1 1 1 rg
+BT
+/F1 15 Tf
+60 782 Td
+(POLICIA DE ENTRE RIOS) Tj
+ET
+
+0.2 0.25 0.35 rg
+BT
+/F1 12 Tf
+60 740 Td
+(${escapePdfText(data.departamental.toUpperCase())}) Tj
+/F2 10 Tf
+0 -16 Td
+(${escapePdfText(data.dependencia.toUpperCase())}) Tj
+ET
+
+0.8 0.85 0.9 rg
+40 705 515 1.5 re
+f
+
+0.1 0.2 0.4 rg
+BT
+/F1 11 Tf
+60 685 Td
+(${escapePdfText(data.numeroMemo)}) Tj
+/F2 10 Tf
+300 0 Td
+(${escapePdfText(`${data.ciudadComision}, Entre Rios - ${data.fechaHora}`)}) Tj
+ET
+
+0.15 0.2 0.3 rg
+BT
+/F2 9.5 Tf
+60 655 Td
+(A LA SUPERIORIDAD: Sr. Jefe de Division / Comisaria) Tj
+0 -16 Td
+(DEL FUNCIONARIO ACTUANTE: ${escapePdfText(data.oficialACargo)} - Movil: ${escapePdfText(data.movilPolicial)}) Tj
+0 -16 Td
+(OBJETO: ${escapePdfText(data.tipoComisionTitulo)}) Tj
+${data.victima ? `0 -16 Td\n(REF: Autos "${escapePdfText(data.victima)} c/ ${escapePdfText(data.victimario || 'DENUNCIADO')}" ${data.nroOficio ? `- Oficio N ${escapePdfText(data.nroOficio)}` : ''}) Tj` : ''}
+ET
+
+0.85 0.88 0.92 rg
+40 575 515 1 re
+f
+
+0.1 0.15 0.2 rg
+BT
+/F1 11 Tf
+60 550 Td
+(1. LUGAR DE LA COMISION:) Tj
+/F2 10 Tf
+0 -16 Td
+(Domicilio: ${escapePdfText(data.domicilioComision || 'Fijado en autos')} - Localidad: ${escapePdfText(data.ciudadComision)}) Tj
+0 -26 Td
+/F1 11 Tf
+(2. NOVEDAD CIRCUNSTANCIADA Y RELATO DE LOS HECHOS:) Tj
+/F2 9.5 Tf
+${linesOfRelato.slice(0, 8).map((line, idx) => `0 -15 Td\n(${line.trim()}) Tj`).join('\n')}
+ET
+
+0.94 0.96 0.99 rg
+40 260 515 45 re
+f
+0.1 0.2 0.35 rg
+BT
+/F1 10 Tf
+60 288 Td
+(RESULTADO DE LA INTERVENCION:) Tj
+/F2 10 Tf
+0 -16 Td
+(${escapePdfText(data.resultadoIntervencion || 'Sin novedad')}) Tj
+ET
+
+0.7 0.7 0.7 rg
+180 130 235 1.5 re
+f
+
+0.2 0.25 0.3 rg
+BT
+/F1 10 Tf
+220 115 Td
+(${escapePdfText(data.oficialACargo)}) Tj
+/F2 9 Tf
+0 -14 Td
+(${escapePdfText(data.dependencia)}) Tj
+0 -12 Td
+(Firma y Sello del Funcionario Interviniente a Cargo) Tj
+ET
+
+0.5 0.55 0.6 rg
+BT
+/F2 8 Tf
+160 40 Td
+(Documento Oficial Policial - Policia de Entre Rios - ${escapePdfText(data.departamental)}) Tj
+ET
+Q
+`;
+
+  const streamLength = contentStream.length;
+
+  const pdfBody = `%PDF-1.4
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+  /Type /Pages
+  /Kids [3 0 R]
+  /Count 1
+>>
+endobj
+3 0 obj
+<<
+  /Type /Page
+  /Parent 2 0 R
+  /MediaBox [0 0 595 842]
+  /Contents 4 0 R
+  /Resources <<
+    /Font <<
+      /F1 5 0 R
+      /F2 6 0 R
+    >>
+  >>
+>>
+endobj
+4 0 obj
+<<
+  /Length ${streamLength}
+>>
+stream
+${contentStream}
+endstream
+endobj
+5 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+>>
+endobj
+6 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+>>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000262 00000 n 
+0000000000 00000 n 
+0000000000 00000 n 
+trailer
+<<
+  /Size 7
+  /Root 1 0 R
+>>
+startxref
+${streamLength + 400}
+%%EOF`;
+
+  return new Blob([pdfBody], { type: 'application/pdf' });
+}
+

@@ -82,6 +82,14 @@ export interface JudicialMeasure {
   pdfBlobUrl?: string;
   lastUpdated?: string;
   updatedBy?: string;
+  // Ubicación y geolocalización policial
+  domicilioVictima?: string;
+  ciudadVictima?: string;
+  latVictima?: number;
+  lngVictima?: number;
+  radioExclusionMetros?: number;
+  domicilioVictimario?: string;
+  telefonoVictima?: string;
   // Custom uploaded PDF & Google Drive metadata
   hasCustomPdf?: boolean;
   serverPdfUrl?: string;
@@ -92,6 +100,52 @@ export interface JudicialMeasure {
   driveFolder?: string;
   driveWebViewLink?: string;
   uploadedAt?: string;
+}
+
+export type TipoComisionPolicial =
+  | 'llamado_comisaria'
+  | 'comision_911'
+  | 'otra_comision'
+  | 'verificacion_domicilio'
+  | 'recorrida_preventiva'
+  | 'incumplimiento_perimetral'
+  | 'notificacion_judicial'
+  | 'exclusion_hogar'
+  | 'asistencia_911'
+  | 'entrevista_victima'
+  | 'otro';
+
+export interface PoliceMemo {
+  id: string;
+  numeroMemo: string; // Ej: "MEMO N° 084/2026 - D.M.V.F."
+  fechaHora: string;
+  dependencia: string; // Ej: "División Minoridad y Violencia Familiar - Jefatura Dptal. Paraná"
+  jefatura: string; // Ej: "Policía de Entre Ríos"
+  tipoComision: TipoComisionPolicial;
+  measureId?: string;
+  nroOficio?: string;
+  victima: string;
+  victimario: string;
+  domicilioComision: string;
+  ciudadComision: string;
+  juzgadoInterviniente: string;
+  // Dotación policial interviniente
+  movilPolicial: string;
+  oficialACargo: string;
+  personalAcompaniante?: string;
+  jerarquia?: string;
+  legajo?: string;
+  // Contenido del parte policial
+  motivoComision: string;
+  relatoHechos: string;
+  resultadoIntervencion: string;
+  intervencionFiscalia?: string;
+  observaciones?: string;
+  creadoPor: string;
+  creadoPorId?: string;
+  creadoPorLegajo?: string;
+  creadoPorRole?: RoleType;
+  createdAt: string;
 }
 
 export interface DriveFile {
@@ -187,7 +241,10 @@ export type AuditAction =
   | 'INSTALL_PWA'
   | 'CREATE_PERSON_IDENTIFICATION'
   | 'UPDATE_PERSON_IDENTIFICATION'
-  | 'DELETE_PERSON_IDENTIFICATION';
+  | 'DELETE_PERSON_IDENTIFICATION'
+  | 'CREATE_POLICE_MEMO'
+  | 'UPDATE_POLICE_MEMO'
+  | 'DELETE_POLICE_MEMO';
 
 export interface AuditLog {
   id: string;

@@ -24,6 +24,7 @@ import {
   Calculator,
   Sparkles,
   MessageCircle,
+  MapPin,
 } from 'lucide-react';
 import { JudicialMeasure, DriveConnectionState, UserProfile } from '../types';
 import { WhatsAppShareModal } from './WhatsAppShareModal';
@@ -544,6 +545,83 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
                   <option key={c} value={c} />
                 ))}
               </datalist>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* SECTION: DOMICILIO DE LA VÍCTIMA & PERÍMETRO POLICIAL */}
+          {/* ========================================================================= */}
+          <div className="p-4 bg-slate-50/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700/60">
+              <div className="w-7 h-7 rounded-lg bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                  Ubicación Protegida de la Víctima (Geolocalización & Navegación GPS)
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Permite ubicar a la víctima en el mapa policial y trazar la ruta de navegación al móvil.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Domicilio Protegido de la Víctima:
+                </label>
+                <input
+                  type="text"
+                  value={formData.domicilioVictima || ''}
+                  onChange={(e) => setFormData({ ...formData, domicilioVictima: e.target.value })}
+                  placeholder="Ej. San Martín 450, o Barrio Paraná I Mza 3 Casa 12"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Ciudad / Localidad:
+                </label>
+                <input
+                  type="text"
+                  value={formData.ciudadVictima || 'Paraná'}
+                  onChange={(e) => setFormData({ ...formData, ciudadVictima: e.target.value })}
+                  placeholder="Paraná"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Radio de Exclusión (Perímetro):
+                </label>
+                <select
+                  value={formData.radioExclusionMetros || 200}
+                  onChange={(e) => setFormData({ ...formData, radioExclusionMetros: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value={100}>100 metros</option>
+                  <option value={200}>200 metros (Estándar)</option>
+                  <option value={300}>300 metros</option>
+                  <option value={500}>500 metros</option>
+                  <option value={1000}>1000 metros (1 km)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Domicilio del Denunciado (Opcional):
+                </label>
+                <input
+                  type="text"
+                  value={formData.domicilioVictimario || ''}
+                  onChange={(e) => setFormData({ ...formData, domicilioVictimario: e.target.value })}
+                  placeholder="Ej. Residencia particular o laboral del denunciado"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
 
