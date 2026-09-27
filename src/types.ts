@@ -119,7 +119,7 @@ export interface PoliceMemo {
   id: string;
   numeroMemo: string; // Ej: "MEMO N° 084/2026 - D.M.V.F."
   fechaHora: string;
-  dependencia: string; // Ej: "División Minoridad y Violencia Familiar - Jefatura Dptal. Victoria"
+  dependencia: string; // Ej: "Comisaría de Minoridad y Violencia Familiar - Jefatura Dptal. Victoria"
   jefatura: string; // Ej: "Policía de Entre Ríos"
   tipoComision: TipoComisionPolicial;
   measureId?: string;
@@ -141,6 +141,19 @@ export interface PoliceMemo {
   resultadoIntervencion: string;
   intervencionFiscalia?: string;
   observaciones?: string;
+  // Campos específicos del formato operativo Victoria (DGDP Victoria / Comisarías / Hecho / Sinopsis)
+  dgdpEncabezado?: string; // Ej: "DGDP- D VICTORIA." o "DGPD - D Victoria"
+  divisionEncabezado?: string; // Ej: "DIV. OP. Y SEGURIDAD PUBLICA" o "Div. Operaciones y Seguridad Publica - Comisaría Quinto Cuartel"
+  hecho?: string; // Ej: "ROBO C/A/D" o "Sup. Desobediencia Judicial..."
+  sinopsis?: string; // Síntesis circunstanciada o descripción de lo sucedido
+  damnificado?: string; // Ej: "CHEVASCO BERNARDO DAMIAN, DNI 34.605.353, de 36 años."
+  tipoPersona?: string; // Ej: 'DAMNIFICADO', 'Detenido', 'Aprehendido', 'Imputado', 'Denunciante'
+  personaDetalle?: string; // Nombre, DNI, edad
+  tipoRelato?: string; // Ej: '"SINOPSIS"', 'DESCRIPCIÓN DE LO SUCEDIDO:', 'RESEÑA:'
+  tipoCierre?: 'cca' | 'fdo'; // 'cca' (*Cca. Sub Comisario...*) o 'fdo' (*14 de Julio de 2026*\nFdo...)
+  cargoFirmante?: string; // Ej: "Jefe de Comisaría Quinto Cuartel"
+  estiloEncabezado?: 'tres_lineas' | 'dos_lineas_combinadas';
+  ordenInvolucrado?: 'arriba' | 'abajo';
   creadoPor: string;
   creadoPorId?: string;
   creadoPorLegajo?: string;

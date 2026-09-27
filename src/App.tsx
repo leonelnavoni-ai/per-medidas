@@ -94,7 +94,7 @@ export default function App() {
     setCurrentTab('memos');
   };
 
-  // Helper to ensure all measures belong strictly to Victoria, Entre Ríos and reset stale Paraná/Concordia references
+  // Helper to ensure measures have valid city and coordinates
   const sanitizeMeasuresToVictoria = (list: JudicialMeasure[]): JudicialMeasure[] => {
     return list.map((m) => {
       let changed = false;
@@ -102,16 +102,27 @@ export default function App() {
       let lat = m.latVictima;
       let lng = m.lngVictima;
 
-      if (!city || city === 'Paraná' || city === 'Concordia') {
+      if (!city) {
         city = 'Victoria';
         changed = true;
       }
 
-      // Reset coordinates if outside Victoria department
-      if (lat && (lat > -32.3 || lat < -32.9 || !lng || lng > -59.7 || lng < -60.45)) {
-        lat = undefined;
-        lng = undefined;
-        changed = true;
+      // Only reset coordinates if invalid or non-numeric
+      if (lat !== undefined && lng !== undefined) {
+        if (
+          typeof lat !== 'number' ||
+          typeof lng !== 'number' ||
+          isNaN(lat) ||
+          isNaN(lng) ||
+          lat < -56 ||
+          lat > -20 ||
+          lng < -75 ||
+          lng > -50
+        ) {
+          lat = undefined;
+          lng = undefined;
+          changed = true;
+        }
       }
 
       if (changed) {
@@ -132,7 +143,17 @@ export default function App() {
       const cached = localStorage.getItem('police_app_measures_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return sanitizeMeasuresToVictoria(parsed);
+        if (Array.isArray(parsed)) {
+          // Exclude any legacy sample mock measures (med-1, med-2, etc.)
+          const clean = parsed.filter((m: any) => {
+            if (m.id && typeof m.id === 'string' && /^med-\d+$/.test(m.id)) {
+              const num = parseInt(m.id.replace('med-', ''), 10);
+              if (num < 1000) return false;
+            }
+            return true;
+          });
+          return sanitizeMeasuresToVictoria(clean);
+        }
       }
     } catch (e) {}
     return sanitizeMeasuresToVictoria(DEFAULT_JUDICIAL_MEASURES);
@@ -1056,7 +1077,11 @@ export default function App() {
     folderName: string = 'Medidas Judiciales',
     removeExistingPdf: boolean = false
   ) => {
-    const finalMeasure: JudicialMeasure = { ...measure };
+    const existing = measures.find((m) => m.id === measure.id);
+    const finalMeasure: JudicialMeasure = {
+      ...(existing || {}),
+      ...measure,
+    };
 
     if (removeExistingPdf) {
       finalMeasure.hasCustomPdf = false;
@@ -1064,9 +1089,22 @@ export default function App() {
       finalMeasure.pdfBlobUrl = undefined;
       finalMeasure.pdfFileName = undefined;
       finalMeasure.pdfFileSize = undefined;
+      finalMeasure.serverPdfUrl = undefined;
       finalMeasure.driveFileId = undefined;
       finalMeasure.driveFolder = undefined;
       finalMeasure.driveWebViewLink = undefined;
+    } else if (!attachedFile && existing) {
+      // PRESERVAR EXPLÍCITAMENTE EL PDF SUBIDO PREVIAMENTE AL MODIFICAR DATOS O UBICACIÓN
+      finalMeasure.hasCustomPdf = existing.hasCustomPdf ?? finalMeasure.hasCustomPdf;
+      finalMeasure.serverPdfUrl = existing.serverPdfUrl ?? finalMeasure.serverPdfUrl;
+      finalMeasure.pdfBlobUrl = existing.pdfBlobUrl ?? finalMeasure.pdfBlobUrl;
+      finalMeasure.pdfBase64 = existing.pdfBase64 ?? finalMeasure.pdfBase64;
+      finalMeasure.pdfFileName = existing.pdfFileName ?? finalMeasure.pdfFileName;
+      finalMeasure.pdfFileSize = existing.pdfFileSize ?? finalMeasure.pdfFileSize;
+      finalMeasure.uploadedAt = existing.uploadedAt ?? finalMeasure.uploadedAt;
+      finalMeasure.driveFileId = existing.driveFileId ?? finalMeasure.driveFileId;
+      finalMeasure.driveFolder = existing.driveFolder ?? finalMeasure.driveFolder;
+      finalMeasure.driveWebViewLink = existing.driveWebViewLink ?? finalMeasure.driveWebViewLink;
     }
 
     if (attachedFile) {
@@ -1150,6 +1188,43 @@ export default function App() {
         'success'
       );
     }
+  };
+
+  // Quick Location Update for Victim in Google Maps
+  const handleQuickUpdateMeasureLocation = async (
+    measure: JudicialMeasure,
+    updated: {
+      domicilioVictima: string;
+      ciudadVictima: string;
+      latVictima: number;
+      lngVictima: number;
+      radioExclusionMetros: number;
+    }
+  ) => {
+    const existing = measures.find((m) => m.id === measure.id) || measure;
+    const updatedMeasure: JudicialMeasure = {
+      ...existing,
+      domicilioVictima: updated.domicilioVictima,
+      ciudadVictima: updated.ciudadVictima,
+      latVictima: updated.latVictima,
+      lngVictima: updated.lngVictima,
+      radioExclusionMetros: updated.radioExclusionMetros,
+      lastUpdated: new Date().toLocaleString(),
+      updatedBy: currentUser.name,
+    };
+
+    const nextMeasures = measures.map((m) => (m.id === measure.id ? updatedMeasure : m));
+    updateMeasuresState(nextMeasures);
+    addAuditLog(
+      'UPDATE_MEASURE',
+      `Ubicación en Google Maps actualizada para víctima ${measure.victima}: ${updated.domicilioVictima} (${updated.latVictima.toFixed(5)}, ${updated.lngVictima.toFixed(5)})`,
+      `Oficio ${measure.nroOficio}`,
+      'SUCCESS'
+    );
+    showToast(
+      `Ubicación en Google Maps actualizada para ${measure.victima}`,
+      'success'
+    );
   };
 
   // Delete Judicial Measure (Exclusive for Administrators)
@@ -1417,6 +1492,7 @@ export default function App() {
             onOpenMapTab={handleOpenMapForMeasure}
             onOpenPoliceMemo={handleOpenPoliceMemoForMeasure}
             userLocation={userLocation}
+            onUpdateMeasureLocation={handleQuickUpdateMeasureLocation}
           />
         )}
 
@@ -1431,6 +1507,7 @@ export default function App() {
             initialSelectedMeasure={initialMapMeasure}
             userLocation={userLocation}
             onBackToMeasures={() => setCurrentTab('measures')}
+            onUpdateMeasureLocation={handleQuickUpdateMeasureLocation}
           />
         )}
 

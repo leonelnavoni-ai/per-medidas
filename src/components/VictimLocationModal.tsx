@@ -15,8 +15,10 @@ import {
   Check,
   CheckCircle2,
   Share2,
+  Edit,
 } from 'lucide-react';
 import { JudicialMeasure } from '../types';
+import { EditVictimLocationModal } from './EditVictimLocationModal';
 import {
   resolveMeasureLocation,
   calculateDistanceKm,
@@ -35,6 +37,16 @@ interface VictimLocationModalProps {
   userLocation: GeoLocation | null;
   onOpenPoliceMemo?: (measure: JudicialMeasure) => void;
   onOpenMapTab?: (measure: JudicialMeasure) => void;
+  onSaveLocation?: (
+    measure: JudicialMeasure,
+    updated: {
+      domicilioVictima: string;
+      ciudadVictima: string;
+      latVictima: number;
+      lngVictima: number;
+      radioExclusionMetros: number;
+    }
+  ) => Promise<void> | void;
 }
 
 export const VictimLocationModal: React.FC<VictimLocationModalProps> = ({
@@ -44,33 +56,33 @@ export const VictimLocationModal: React.FC<VictimLocationModalProps> = ({
   userLocation,
   onOpenPoliceMemo,
   onOpenMapTab,
+  onSaveLocation,
 }) => {
+  const [currentMeasure, setCurrentMeasure] = useState<JudicialMeasure>(measure);
+  const [isEditLocationOpen, setIsEditLocationOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const loc = resolveMeasureLocation(measure);
-  const exp = getMeasureExpirationInfo(measure.fechaHasta);
+
+  useEffect(() => {
+    setCurrentMeasure(measure);
+  }, [measure]);
+
+  const loc = resolveMeasureLocation(currentMeasure);
+  const exp = getMeasureExpirationInfo(currentMeasure.fechaHasta);
 
   // Distance from officer if location available
-  const distanceKm = userLocation
+  const distanceKm = userLocation && loc.hasLocation
     ? calculateDistanceKm(userLocation.lat, userLocation.lng, loc.lat, loc.lng)
     : null;
 
   const patrolTime = distanceKm !== null ? estimateTravelTime(distanceKm, 'patrol') : null;
   const walkTime = distanceKm !== null ? estimateTravelTime(distanceKm, 'walking') : null;
 
-  const googleMapsNavUrl = getGoogleMapsDirUrl(
-    loc.lat,
-    loc.lng,
-    userLocation?.lat,
-    userLocation?.lng
-  );
-
-  const googleMapsViewUrl = getGoogleMapsPlaceUrl(
-    loc.lat,
-    loc.lng,
-    `${measure.victima} - ${loc.direccion}`
-  );
+  const googleMapsNavUrl = loc.hasLocation
+    ? getGoogleMapsDirUrl(loc.lat, loc.lng, userLocation?.lat, userLocation?.lng)
+    : '';
 
   const handleCopyAddress = () => {
+    if (!loc.hasLocation) return;
     const fullText = `${loc.direccion}, ${loc.ciudad}, Entre Ríos (Coordenadas: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})`;
     navigator.clipboard.writeText(fullText);
     setCopied(true);
@@ -83,13 +95,11 @@ export const VictimLocationModal: React.FC<VictimLocationModalProps> = ({
 *Denunciado:* ${measure.victimario}
 *Medida:* ${measure.tipoMedida} (Oficio N° ${measure.nroOficio})
 *Juzgado:* ${measure.provenienteDe}
-*Domicilio protegido:* ${loc.direccion}, ${loc.ciudad}
-*Radio de exclusión:* ${loc.radioMetros} metros
+${loc.hasLocation ? `*Domicilio protegido:* ${loc.direccion}, ${loc.ciudad}\n*Radio de exclusión:* ${loc.radioMetros} metros` : '*Ubicación:* Sin ubicación cargada por el usuario'}
 *Vigencia:* ${measure.fechaHasta || 'Duración de la causa'}
 ${distanceKm !== null ? `*Distancia estimada de patrulla:* ${formatDistance(distanceKm)} (~${patrolTime?.text})` : ''}
 
-🗺️ *Ruta Google Maps GPS:*
-${googleMapsNavUrl}`;
+${loc.hasLocation ? `🗺️ *Ruta Google Maps GPS:*\n${googleMapsNavUrl}` : ''}`;
 
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -139,20 +149,41 @@ ${googleMapsNavUrl}`;
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
                   Domicilio Protegido de la Víctima
                 </span>
-                <p className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-0.5">
-                  <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>{loc.direccion}, {loc.ciudad}</span>
-                </p>
+                {loc.hasLocation ? (
+                  <p className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-0.5">
+                    <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{loc.direccion}, {loc.ciudad}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-2 mt-0.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Sin ubicación cargada por el usuario</span>
+                  </p>
+                )}
               </div>
 
-              <button
-                onClick={handleCopyAddress}
-                className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Copiar domicilio completo y coordenadas al portapapeles"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copiado' : 'Copiar Domicilio'}</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setIsEditLocationOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                  title="Cargar o modificar la ubicación exacta en Google Maps"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>{loc.hasLocation ? 'Modificar Ubicación' : 'Cargar Ubicación en Google Maps'}</span>
+                </button>
+
+                {loc.hasLocation && (
+                  <button
+                    onClick={handleCopyAddress}
+                    className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Copiar domicilio completo y coordenadas al portapapeles"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copiado' : 'Copiar Domicilio'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-700/60 text-xs">
@@ -237,25 +268,46 @@ ${googleMapsNavUrl}`;
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Turn-by-turn Navigation in Google Maps App */}
-              <a
-                href={googleMapsNavUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-blue-500/20 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-white/20">
-                    <Navigation className="w-4 h-4 text-white group-hover:animate-pulse" />
+              {loc.hasLocation ? (
+                <a
+                  href={googleMapsNavUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-blue-500/20 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-white/20">
+                      <Navigation className="w-4 h-4 text-white group-hover:animate-pulse" />
+                    </div>
+                    <div className="text-left">
+                      <span className="block text-sm">Abrir Navegación Google Maps</span>
+                      <span className="text-[10.5px] text-blue-100 font-normal">
+                        Guía paso a paso en tiempo real GPS
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <span className="block text-sm">Abrir Navegación Google Maps</span>
-                    <span className="text-[10.5px] text-blue-100 font-normal">
-                      Guía paso a paso en tiempo real GPS
-                    </span>
+                  <ExternalLink className="w-4 h-4 text-white/80 shrink-0 ml-2" />
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditLocationOpen(true)}
+                  className="p-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-between shadow-md shadow-blue-500/20 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-white/20">
+                      <MapPin className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <span className="block text-sm">Cargar Ubicación en Google Maps</span>
+                      <span className="text-[10.5px] text-blue-100 font-normal">
+                        Fijar punto en el mapa para habilitar navegación GPS
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <ExternalLink className="w-4 h-4 text-white/80 shrink-0 ml-2" />
-              </a>
+                  <Edit className="w-4 h-4 text-white/80 shrink-0 ml-2" />
+                </button>
+              )}
 
               {/* View in Map Tab */}
               {onOpenMapTab && (
@@ -331,6 +383,25 @@ ${googleMapsNavUrl}`;
         </div>
 
       </div>
+
+      {/* Modal interactivo de Modificación de Ubicación en Google Maps */}
+      {isEditLocationOpen && (
+        <EditVictimLocationModal
+          isOpen={isEditLocationOpen}
+          onClose={() => setIsEditLocationOpen(false)}
+          measure={currentMeasure}
+          onSaveLocation={async (updated) => {
+            const nextMeasure: JudicialMeasure = {
+              ...currentMeasure,
+              ...updated,
+            };
+            setCurrentMeasure(nextMeasure);
+            if (onSaveLocation) {
+              await onSaveLocation(currentMeasure, updated);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

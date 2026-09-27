@@ -52,6 +52,16 @@ interface JudicialMeasuresExplorerProps {
   onOpenMapTab?: (measure: JudicialMeasure) => void;
   onOpenPoliceMemo?: (measure: JudicialMeasure) => void;
   userLocation?: GeoLocation | null;
+  onUpdateMeasureLocation?: (
+    measure: JudicialMeasure,
+    updated: {
+      domicilioVictima: string;
+      ciudadVictima: string;
+      latVictima: number;
+      lngVictima: number;
+      radioExclusionMetros: number;
+    }
+  ) => Promise<void> | void;
 }
 
 export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> = ({
@@ -67,6 +77,7 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
   onOpenMapTab,
   onOpenPoliceMemo,
   userLocation = null,
+  onUpdateMeasureLocation,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [locationModalMeasure, setLocationModalMeasure] = useState<JudicialMeasure | null>(null);
@@ -941,20 +952,25 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
                         {/* Actions */}
                         <td className="py-3 px-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Ubicación y Ruta hacia la víctima en Mapa Operativo */}
+                            {/* Ver y Modificar Ubicación en Google Maps */}
                             <button
-                              onClick={() => {
-                                if (onOpenMapTab) {
-                                  onOpenMapTab(m);
-                                } else {
-                                  setLocationModalMeasure(m);
-                                }
-                              }}
+                              onClick={() => setLocationModalMeasure(m)}
                               className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
-                              title="Ver únicamente esta medida en el mapa operativo y trazar recorrido a la víctima"
+                              title="Ver y Modificar Ubicación de la Víctima en Google Maps"
                             >
                               <MapPin className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                             </button>
+
+                            {/* Ver en Mapa Operativo Policial */}
+                            {onOpenMapTab && (
+                              <button
+                                onClick={() => onOpenMapTab(m)}
+                                className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-colors cursor-pointer"
+                                title="Ver en el mapa operativo policial y trazar recorrido de patrulla"
+                              >
+                                <Navigation className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                              </button>
+                            )}
 
                             {/* Generar Memo Policial */}
                             {onOpenPoliceMemo && (
@@ -1206,21 +1222,27 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {/* Botón Ubicación y Ruta hacia la Víctima (Solicitud directa del usuario: abre mapa operativo focalizado) */}
+                      {/* Botón Ver y Modificar Ubicación en Google Maps */}
                       <button
-                        onClick={() => {
-                          if (onOpenMapTab) {
-                            onOpenMapTab(m);
-                          } else {
-                            setLocationModalMeasure(m);
-                          }
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                        title="Ver únicamente esta medida en el mapa operativo y trazar el recorrido hacia el lugar de la víctima"
+                        onClick={() => setLocationModalMeasure(m)}
+                        className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Ver y Modificar Ubicación de la Víctima en Google Maps"
                       >
                         <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                        <span>Ubicación y Ruta</span>
+                        <span>Ubicación</span>
                       </button>
+
+                      {/* Botón Mapa Operativo y Recorrido de Patrulla */}
+                      {onOpenMapTab && (
+                        <button
+                          onClick={() => onOpenMapTab(m)}
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Ver en el mapa operativo y trazar recorrido de patrulla"
+                        >
+                          <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span>Ruta</span>
+                        </button>
+                      )}
 
                       {/* Generar Memo de Comisión Policial */}
                       {onOpenPoliceMemo && (
@@ -1339,6 +1361,7 @@ export const JudicialMeasuresExplorer: React.FC<JudicialMeasuresExplorerProps> =
           userLocation={userLocation}
           onOpenPoliceMemo={onOpenPoliceMemo}
           onOpenMapTab={onOpenMapTab}
+          onSaveLocation={onUpdateMeasureLocation}
         />
       )}
     </div>

@@ -58,18 +58,19 @@ export const DEPARTAMENTALES_PER = [
   'Jefatura Departamental Islas del Ibicuy',
 ];
 
-// Jerarquías oficiales de la Policía de Entre Ríos (PER) con Oficial Inspector incluido
+// Jerarquías oficiales de la Policía de Entre Ríos (PER) con Sub Comisario e Inspector
 export const JERARQUIAS_PER = [
-  'Oficial Principal',
-  'Oficial Inspector',
-  'Oficial Subinspector',
-  'Oficial Auxiliar',
-  'Oficial Ayudante',
+  'Sub Comisario',
   'Subcomisario',
   'Comisario',
   'Comisario Principal',
   'Comisario Inspector',
   'Comisario Mayor',
+  'Oficial Principal',
+  'Oficial Inspector',
+  'Oficial Subinspector',
+  'Oficial Auxiliar',
+  'Oficial Ayudante',
   'Suboficial Mayor',
   'Suboficial Principal',
   'Sargento Ayudante',
@@ -79,6 +80,148 @@ export const JERARQUIAS_PER = [
   'Cabo',
   'Agente',
 ];
+
+// Dependencias y Comisarías oficiales de Victoria, Entre Ríos
+export const DEPENDENCIAS_VICTORIA = [
+  'COMISARÍA QUINTO CUARTEL',
+  'SECCIÓN COMANDO RADIOELÉCTRICO',
+  'SECCIÓN MOTORIZADA',
+  'COMISARÍA SUBURBIOS',
+  'COMISARÍA DE MINORIDAD Y VIOLENCIA FAMILIAR',
+  'DIV. OP. Y SEGURIDAD PUBLICA',
+  'DIVISIÓN INVESTIGACIONES',
+  'DIVISIÓN TOXICOLOGÍA',
+  'COMISARÍA RINCON DEL DOLL',
+  'COMISARÍA LAGUNA DEL PESCADO',
+  'COMISARÍA MOLINO DOLLEZ',
+  'COMISARÍA PAJONAL',
+  'COMISARÍA MONTOYA',
+];
+
+// Hechos operativos y carátulas policiales más frecuentes
+export const HECHOS_COMUNES = [
+  'ROBO C/A/D',
+  'Sup. Desobediencia Judicial',
+  'HURTO',
+  'DESOBEDIENCIA JUDICIAL',
+  'MEDIDA CAUTELAR / PROHIBICIÓN',
+  'AMENAZAS Y LESIONES',
+  'AVERIGUACIÓN DE ILÍCITO',
+  'HALLAZGO / SECUESTRO',
+  'LLAMADO A COMISARÍA',
+  'COMISIÓN POR 911',
+];
+
+// Opciones de persona involucrada en el memo
+export const TIPOS_PERSONA_COMUNES = [
+  'DAMNIFICADO',
+  'Detenido',
+  'Aprehendido',
+  'Imputado',
+  'Denunciante',
+  'Victimario',
+];
+
+export interface VictoriaOperationalMemoParams {
+  dgdpEncabezado?: string;
+  divisionEncabezado?: string;
+  dependencia?: string;
+  estiloEncabezado?: 'tres_lineas' | 'dos_lineas_combinadas';
+  hecho?: string;
+  etiquetaHecho?: string;
+  fechaHora?: string;
+  domicilioComision?: string;
+  tipoPersona?: string;
+  personaDetalle?: string;
+  damnificado?: string;
+  ordenInvolucrado?: 'arriba' | 'abajo';
+  sinopsis?: string;
+  jerarquia?: string;
+  nombre?: string;
+}
+
+// Generador del Formato Operativo Oficial de Victoria (WhatsApp / Despacho / Parte Policial)
+export const generateVictoriaOperationalMemo = (params: VictoriaOperationalMemoParams): string => {
+  const estiloEncabezado = params.estiloEncabezado || 'tres_lineas';
+  const dgdp = params.dgdpEncabezado?.trim() || 'DGDP- D VICTORIA.';
+  const div = params.divisionEncabezado?.trim() || 'DIV. OP. Y SEGURIDAD PUBLICA';
+  const dep = params.dependencia?.trim() || 'COMISARÍA QUINTO CUARTEL';
+  const hecho = params.hecho?.trim() || 'ROBO C/A/D';
+  const etiquetaHecho = params.etiquetaHecho?.trim() || (hecho.startsWith('Sup.') || hecho.startsWith('Desobediencia') ? '*Hecho*' : '*"HECHO"*');
+
+  const d = params.fechaHora ? new Date(params.fechaHora) : new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const yearShort = String(d.getFullYear()).slice(-2);
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+
+  const fechaStr = `${day}/${month}/${yearShort}`;
+  const horaStr = `${hours}:${minutes}`;
+
+  const MONTHS_ES = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  const fechaLarga = `${d.getDate()} de ${MONTHS_ES[d.getMonth()]} de ${d.getFullYear()}`;
+
+  const lugar = params.domicilioComision?.trim() || 'Calle Maipú y Los Horneros';
+  
+  const personaTexto = params.personaDetalle?.trim() || params.damnificado?.trim() || 'CHEVASCO BERNARDO DAMIAN, DNI 34.605.353, de 36 años.';
+  const etiquetaPersona = params.tipoPersona?.trim() || (personaTexto.toLowerCase().includes('sánchez') || hecho.toLowerCase().includes('desobediencia') ? 'Detenido' : 'DAMNIFICADO');
+
+  const sinopsis = params.sinopsis?.trim() || 'momentos en que la propiedad estaba deshabitada dos masculinos desconocidos con los rostros cubiertos y con guantes puestos irrumpieron en el domicilio rompieron una ventana trasera, dónde en una de las habitaciones sustrajeron únicamente una mochila que contenía $25.000.000 pesos argentinos y 10.000 dólares.';
+  const jer = params.jerarquia?.trim() || 'Sub Comisario';
+  const nom = params.nombre?.trim() || 'BUSTOS Alejandro';
+
+  // Líneas de encabezado institucional
+  let encabezadoBloque = '';
+  if (estiloEncabezado === 'dos_lineas_combinadas') {
+    encabezadoBloque = `*${dgdp}*\n*${div}*`;
+  } else {
+    encabezadoBloque = `*${dgdp}*\n*${div}*\n*${dep}*`;
+  }
+
+  // Línea de Hecho
+  const hechoBloque = etiquetaHecho.startsWith('*') ? `${etiquetaHecho} ${hecho}` : `*${etiquetaHecho}* ${hecho}`;
+
+  // Línea de Persona Involucrada
+  const etiquetaPersonaPura = etiquetaPersona.replace(/\*/g, '');
+  const personaBloque = `*${etiquetaPersonaPura}* ${personaTexto}`;
+
+  // Cierre / Firma institucional (siempre Fdo. con fecha larga)
+  const firmaBloque = `*${fechaLarga}*\nFdo. ${jer} ${nom}`;
+
+  // Si ordenInvolucrado === 'arriba' (como en Sup. Desobediencia Judicial / Detenido):
+  // Encabezado -> Hecho -> Detenido -> Fecha -> Hora -> Lugar -> SINOPSIS -> Cierre
+  // Si ordenInvolucrado === 'abajo' (como en Robo / Damnificado):
+  // Encabezado -> Hecho -> Fecha -> Hora -> Lugar -> Damnificado -> SINOPSIS -> Cierre
+  const orden = params.ordenInvolucrado || (etiquetaPersona === 'Detenido' ? 'arriba' : 'abajo');
+
+  if (orden === 'arriba') {
+    return `${encabezadoBloque}
+
+${hechoBloque}
+${personaBloque}
+
+*FECHA:*  ${fechaStr}
+*HORA:* ${horaStr}
+*LUGAR:* ${lugar}
+*"SINOPSIS"* ${sinopsis}
+
+${firmaBloque}`;
+  } else {
+    return `${encabezadoBloque}
+${hechoBloque}
+*FECHA:*  ${fechaStr}
+*HORA:* ${horaStr}
+*LUGAR:* ${lugar}
+${personaBloque}
+*"SINOPSIS"* ${sinopsis}
+
+${firmaBloque}`;
+  }
+};
 
 // Plantillas alineadas con el procedimiento policial de Entre Ríos
 const MEMO_TEMPLATES: Record<
@@ -218,25 +361,38 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
     return 'Jefatura Departamental Victoria';
   });
 
+  // ENCABEZADOS OPERATIVOS VICTORIA (Persistentes)
+  const [dgdpEncabezado, setDgdpEncabezado] = useState<string>(() => {
+    return localStorage.getItem('per_fixed_dgdp') || 'DGDP- D VICTORIA.';
+  });
+
+  const [divisionEncabezado, setDivisionEncabezado] = useState<string>(() => {
+    return localStorage.getItem('per_fixed_division') || 'DIV. OP. Y SEGURIDAD PUBLICA';
+  });
+
   // DEPENDENCIA / COMISARÍA FIJADA (Persistente)
   const [dependencia, setDependencia] = useState<string>(() => {
+    const saved = localStorage.getItem('per_fixed_dependencia');
+    if (saved === 'DIVISIÓN MINORIDAD Y FAMILIA' || saved === 'DIV. MINORIDAD Y FAMILIA' || saved === 'COMISARÍA PRIMER CUARTEL') {
+      return 'COMISARÍA DE MINORIDAD Y VIOLENCIA FAMILIAR';
+    }
     return (
-      localStorage.getItem('per_fixed_dependencia') ||
+      saved ||
       currentUser.department ||
-      'División Minoridad y Violencia Familiar'
+      'COMISARÍA QUINTO CUARTEL'
     );
   });
 
   // Funcionario interviniente FIJADO (jerarquía, nombre y legajo que persisten)
   const [jerarquiaFuncionario, setJerarquiaFuncionario] = useState<string>(() => {
-    return localStorage.getItem('per_fixed_jerarquia') || 'Oficial Inspector';
+    return localStorage.getItem('per_fixed_jerarquia') || 'Sub Comisario';
   });
 
   const [nombreFuncionario, setNombreFuncionario] = useState<string>(() => {
     return (
       localStorage.getItem('per_fixed_nombre') ||
       currentUser.name ||
-      'Navoni Leonel'
+      'BUSTOS Alejandro'
     );
   });
 
@@ -244,7 +400,7 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
     return (
       localStorage.getItem('per_fixed_legajo') ||
       currentUser.badgeNumber ||
-      '16.482'
+      ''
     );
   });
 
@@ -264,6 +420,14 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
   useEffect(() => {
     localStorage.setItem('per_fixed_departamental', departamental);
   }, [departamental]);
+
+  useEffect(() => {
+    localStorage.setItem('per_fixed_dgdp', dgdpEncabezado);
+  }, [dgdpEncabezado]);
+
+  useEffect(() => {
+    localStorage.setItem('per_fixed_division', divisionEncabezado);
+  }, [divisionEncabezado]);
 
   useEffect(() => {
     localStorage.setItem('per_fixed_dependencia', dependencia);
@@ -289,6 +453,27 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
     localStorage.setItem('per_fixed_movil', movilPolicial);
   }, [movilPolicial]);
 
+  // Cargo / Rol policial del firmante (Persistente)
+  const [cargoFuncionario, setCargoFuncionario] = useState<string>(() => {
+    return localStorage.getItem('per_fixed_cargo') || 'Jefe de Comisaría Quinto Cuartel';
+  });
+
+  // Estilo de encabezado ('tres_lineas' | 'dos_lineas_combinadas')
+  const [estiloEncabezado, setEstiloEncabezado] = useState<'tres_lineas' | 'dos_lineas_combinadas'>(() => {
+    return (localStorage.getItem('per_fixed_estilo_encabezado') as any) || 'tres_lineas';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('per_fixed_estilo_encabezado', estiloEncabezado);
+  }, [estiloEncabezado]);
+
+  // Etiqueta de Hecho (*"HECHO"* o *Hecho*)
+  const [etiquetaHecho, setEtiquetaHecho] = useState<string>('*\"HECHO\"*');
+
+  // Tipo y orden de persona involucrada (DAMNIFICADO, Detenido, Aprehendido, etc.)
+  const [tipoPersona, setTipoPersona] = useState<string>('DAMNIFICADO');
+  const [ordenInvolucrado, setOrdenInvolucrado] = useState<'arriba' | 'abajo'>('abajo');
+
   // Campos del formulario
   const [numeroMemo, setNumeroMemo] = useState<string>(() => {
     const year = new Date().getFullYear();
@@ -298,16 +483,24 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
   });
 
   const [fechaHora, setFechaHora] = useState<string>(() => {
+    // 14/07/26 09:20 como fecha de referencia si coincide o fecha actual
     const now = new Date();
     const tzOffset = now.getTimezoneOffset() * 60000;
     return new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
   });
+
+  // HECHO / CARÁTULA
+  const [hecho, setHecho] = useState<string>('ROBO C/A/D');
 
   // Tipo de comisión por defecto: 'llamado_comisaria'
   const [tipoComision, setTipoComision] = useState<TipoComisionPolicial>('llamado_comisaria');
 
   const [victima, setVictima] = useState(initialMeasure?.victima || '');
   const [victimario, setVictimario] = useState(initialMeasure?.victimario || '');
+  const [damnificado, setDamnificado] = useState<string>(() => {
+    if (initialMeasure?.victima) return initialMeasure.victima;
+    return 'CHEVASCO BERNARDO DAMIAN, DNI 34.605.353, de 36 años.';
+  });
   const [nroOficio, setNroOficio] = useState(initialMeasure?.nroOficio || '');
   const [juzgadoInterviniente, setJuzgadoInterviniente] = useState(initialMeasure?.provenienteDe || '');
   const [domicilioComision, setDomicilioComision] = useState(() => {
@@ -315,32 +508,29 @@ export const PoliceMemosTab: React.FC<PoliceMemosTabProps> = ({
       const loc = resolveMeasureLocation(initialMeasure);
       return loc.direccion;
     }
-    return '';
+    return 'Calle Maipú y Los Horneros';
   });
 
   const [motivoComision, setMotivoComision] = useState(
     MEMO_TEMPLATES.llamado_comisaria.motivo
   );
+
+  const [sinopsis, setSinopsis] = useState<string>(
+    'momentos en que la propiedad estaba deshabitada dos masculinos desconocidos con los rostros cubiertos y con guantes puestos irrumpieron en el domicilio rompieron una ventana trasera, dónde en una de las habitaciones sustrajeron únicamente una mochila que contenía $25.000.000 pesos argentinos y 10.000 dólares.'
+  );
+
   const [relatoHechos, setRelatoHechos] = useState(() => {
-    const tmpl = MEMO_TEMPLATES.llamado_comisaria;
-    return tmpl.relatoSugerido(
-      initialMeasure?.victima || '',
-      initialMeasure?.victimario || '',
-      initialMeasure ? resolveMeasureLocation(initialMeasure).direccion : '',
-      initialMeasure?.provenienteDe || '',
-      initialMeasure?.nroOficio || ''
-    );
+    return 'momentos en que la propiedad estaba deshabitada dos masculinos desconocidos con los rostros cubiertos y con guantes puestos irrumpieron en el domicilio rompieron una ventana trasera, dónde en una de las habitaciones sustrajeron únicamente una mochila que contenía $25.000.000 pesos argentinos y 10.000 dólares.';
   });
 
   // Resultado predeterminado: "Sin novedad"
   const [resultadoIntervencion, setResultadoIntervencion] = useState<string>('Sin novedad');
-  const [observaciones, setObservaciones] = useState('');
 
   // UI status helpers
   const [copiedGuardBook, setCopiedGuardBook] = useState(false);
   const [copiedMemoText, setCopiedMemoText] = useState(false);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
-  const [previewTab, setPreviewTab] = useState<'official' | 'whatsapp'>('official');
+  const [previewTab, setPreviewTab] = useState<'official' | 'whatsapp'>('whatsapp');
   const [searchHistoryTerm, setSearchHistoryTerm] = useState('');
 
   // Sincronizar datos si proviene de una medida seleccionada en tarjeta o mapa
@@ -418,7 +608,7 @@ AUTOS / REF: "${victima || 'VÍCTIMA'} C/ ${victimario || 'DENUNCIADO'}" ${nroOf
 LUGAR: ${domicilioComision || 'No especificado'}, ${ciudadComision}
 NOVEDAD CIRCUNSTANCIADA: ${relatoHechos}
 RESULTADO: ${resultadoIntervencion || 'Sin novedad'}
-${observaciones ? `OBSERVACIONES: ${observaciones}\n` : ''}FUNCIONARIO INTERVINIENTE: ${jerarquiaFuncionario} ${nombreFuncionario}${legajoFuncionario ? ` (Legajo ${legajoFuncionario})` : ''}`;
+FUNCIONARIO INTERVINIENTE: ${jerarquiaFuncionario} ${nombreFuncionario}${legajoFuncionario ? ` (Legajo ${legajoFuncionario})` : ''}`;
   };
 
   // Texto para Memorándum Oficial PER (actualiza dinámicamente la Departamental seleccionada)
@@ -462,7 +652,6 @@ ${relatoHechos}
 
 5. RESULTADO DE LA INTERVENCIÓN:
 ${resultadoIntervencion || 'Sin novedad'}
-${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
 
                                 _________________________________________
                                      ${jerarquiaFuncionario} ${nombreFuncionario}
@@ -480,17 +669,16 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
         dependencia,
         oficialACargo: `${jerarquiaFuncionario} ${nombreFuncionario}${legajoFuncionario ? ` (Leg. ${legajoFuncionario})` : ''}`,
         movilPolicial,
-        victima,
+        victima: damnificado || victima,
         victimario,
         nroOficio,
         juzgadoInterviniente,
         domicilioComision,
         ciudadComision,
-        tipoComisionTitulo: MEMO_TEMPLATES[tipoComision]?.titulo || 'Parte de Comisión',
-        motivoComision,
-        relatoHechos,
+        tipoComisionTitulo: hecho || MEMO_TEMPLATES[tipoComision]?.titulo || 'Parte de Comisión',
+        motivoComision: hecho || motivoComision,
+        relatoHechos: sinopsis || relatoHechos,
         resultadoIntervencion: resultadoIntervencion || 'Sin novedad',
-        observaciones,
         jerarquia: jerarquiaFuncionario,
         nombre: nombreFuncionario,
         legajo: legajoFuncionario,
@@ -524,89 +712,40 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
     setTimeout(() => setCopiedMemoText(false), 2000);
   };
 
-  // Formato resumido para WhatsApp (distribución ultra concisa y directa)
-  const generateWhatsAppMemoText = (customData?: {
-    numeroMemo?: string;
-    departamental?: string;
-    dependencia?: string;
-    fechaHora?: string;
-    movilPolicial?: string;
-    jerarquia?: string;
-    nombre?: string;
-    legajo?: string;
-    domicilioComision?: string;
-    ciudadComision?: string;
-    tipoComision?: TipoComisionPolicial;
-    victima?: string;
-    victimario?: string;
-    nroOficio?: string;
-    relatoHechos?: string;
-    resultadoIntervencion?: string;
-    observaciones?: string;
-  }) => {
-    const num = customData?.numeroMemo || numeroMemo;
-    const dep = customData?.dependencia || dependencia;
-    const deptal = customData?.departamental || departamental;
-    const fHora = customData?.fechaHora || fechaHora;
-    const movil = customData?.movilPolicial || movilPolicial;
-    const jer = customData?.jerarquia || jerarquiaFuncionario;
-    const nom = customData?.nombre || nombreFuncionario;
-    const leg = customData?.legajo !== undefined ? customData.legajo : legajoFuncionario;
-    const dom = customData?.domicilioComision !== undefined ? customData.domicilioComision : domicilioComision;
-    const ciu = customData?.ciudadComision !== undefined ? customData.ciudadComision : ciudadComision;
-    const tipo = customData?.tipoComision || tipoComision;
-    const vic = customData?.victima !== undefined ? customData.victima : victima;
-    const victo = customData?.victimario !== undefined ? customData.victimario : victimario;
-    const oficio = customData?.nroOficio !== undefined ? customData.nroOficio : nroOficio;
-    const relato = customData?.relatoHechos !== undefined ? customData.relatoHechos : relatoHechos;
-    const resultado = customData?.resultadoIntervencion !== undefined ? customData.resultadoIntervencion : (resultadoIntervencion || 'Sin novedad');
-    const obs = customData?.observaciones !== undefined ? customData.observaciones : observaciones;
+  // Acciones de limpieza de formulario
+  const handleClearForm = () => {
+    setHecho('');
+    setDomicilioComision('');
+    setDamnificado('');
+    setVictima('');
+    setVictimario('');
+    setNroOficio('');
+    setSinopsis('');
+    setRelatoHechos('');
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    setFechaHora(new Date(now.getTime() - tzOffset).toISOString().slice(0, 16));
+  };
 
-    const d = new Date(fHora);
-    const fecha = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-    const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-
-    const tipoLabel =
-      tipo === 'llamado_comisaria'
-        ? 'Llamado a Dependencia'
-        : tipo === 'comision_911'
-        ? 'Comisión por 911'
-        : tipo === 'otra_comision'
-        ? 'Otra comisión'
-        : MEMO_TEMPLATES[tipo]?.titulo || 'Comisión Policial';
-
-    // En "Lugar" va la dirección exacta de la comisión
-    const dirLugar = dom?.trim()
-      ? `${dom.trim()}${ciu && !dom.toLowerCase().includes(ciu.toLowerCase()) ? `, ${ciu}` : ''}`
-      : (ciu || 'Dirección no consignada');
-
-    const cleanRelato = relato
-      ? relato.replace(/\r\n/g, ' ').replace(/\n+/g, ' ').trim()
-      : 'Sin novedad.';
-
-    const lines: string[] = [
-      `🚨 *PARTE DE COMISIÓN* (${num})`,
-      `🏛️ *Dependencia:* ${dep} (${deptal})`,
-      `🗓️ *Fecha:* ${fecha} - ${hora} Hs.`,
-      `🚔 *Móvil/Dotación:* ${movil} | ${jer} ${nom}${leg ? ` (Leg. ${leg})` : ''}`,
-      `📍 *Lugar:* ${dirLugar}`,
-      `🎯 *Motivo:* ${tipoLabel}`,
-    ];
-
-    if (vic || victo || oficio) {
-      lines.push(
-        `⚖️ *Autos:* ${vic || 'S/D'} c/ ${victo || 'S/D'}${oficio ? ` | Of. ${oficio}` : ''}`
-      );
-    }
-
-    lines.push(`📝 *Novedad:* ${cleanRelato}`);
-    lines.push(`✅ *Resultado:* ${resultado || 'Sin novedad'}`);
-
-    if (obs && obs.trim()) {
-      lines.push(`📌 *Obs:* ${obs.trim()}`);
-    }
-
-    return lines.join('\n');
+  // Formato Operativo Policial Victoria (exacto al memo requerido)
+  const generateWhatsAppMemoText = (customData?: Partial<VictoriaOperationalMemoParams>) => {
+    return generateVictoriaOperationalMemo({
+      dgdpEncabezado: customData?.dgdpEncabezado !== undefined ? customData.dgdpEncabezado : dgdpEncabezado,
+      divisionEncabezado: customData?.divisionEncabezado !== undefined ? customData.divisionEncabezado : divisionEncabezado,
+      dependencia: customData?.dependencia !== undefined ? customData.dependencia : dependencia,
+      estiloEncabezado: customData?.estiloEncabezado !== undefined ? customData.estiloEncabezado : estiloEncabezado,
+      hecho: customData?.hecho !== undefined ? customData.hecho : hecho,
+      etiquetaHecho: customData?.etiquetaHecho !== undefined ? customData.etiquetaHecho : etiquetaHecho,
+      fechaHora: customData?.fechaHora !== undefined ? customData.fechaHora : fechaHora,
+      domicilioComision: customData?.domicilioComision !== undefined ? customData.domicilioComision : domicilioComision,
+      tipoPersona: customData?.tipoPersona !== undefined ? customData.tipoPersona : tipoPersona,
+      personaDetalle: customData?.personaDetalle !== undefined ? customData.personaDetalle : (damnificado || victima),
+      damnificado: customData?.damnificado !== undefined ? customData.damnificado : (damnificado || victima),
+      ordenInvolucrado: customData?.ordenInvolucrado !== undefined ? customData.ordenInvolucrado : ordenInvolucrado,
+      sinopsis: customData?.sinopsis !== undefined ? customData.sinopsis : (sinopsis || relatoHechos),
+      jerarquia: customData?.jerarquia !== undefined ? customData.jerarquia : jerarquiaFuncionario,
+      nombre: customData?.nombre !== undefined ? customData.nombre : nombreFuncionario,
+    });
   };
 
   // Copiar formato resumido para WhatsApp
@@ -629,8 +768,9 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
 
   // Guardar memo exclusivamente en servidor policial centralizado
   const handleSaveMemo = async () => {
-    if (!relatoHechos.trim()) {
-      alert('Por favor complete el relato de la comisión.');
+    const finalRelato = (sinopsis || relatoHechos).trim();
+    if (!finalRelato) {
+      alert('Por favor complete la sinopsis o relato de la comisión.');
       return;
     }
 
@@ -643,8 +783,8 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
       tipoComision,
       measureId: initialMeasure?.id,
       nroOficio,
-      victima: victima || 'No especificada',
-      victimario: victimario || 'No especificado',
+      victima: damnificado || victima || 'No especificada',
+      victimario: victimario || '',
       domicilioComision: domicilioComision || 'No especificado',
       ciudadComision,
       juzgadoInterviniente,
@@ -652,10 +792,19 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
       oficialACargo: `${jerarquiaFuncionario} ${nombreFuncionario}${legajoFuncionario ? ` (Leg. ${legajoFuncionario})` : ''}`,
       jerarquia: jerarquiaFuncionario,
       legajo: legajoFuncionario,
-      motivoComision,
-      relatoHechos,
+      motivoComision: hecho || motivoComision,
+      relatoHechos: finalRelato,
       resultadoIntervencion: resultadoIntervencion || 'Sin novedad',
-      observaciones,
+      dgdpEncabezado,
+      divisionEncabezado,
+      hecho,
+      sinopsis: finalRelato,
+      damnificado: damnificado || victima,
+      tipoPersona,
+      personaDetalle: damnificado || victima,
+      tipoCierre: 'fdo',
+      estiloEncabezado,
+      ordenInvolucrado,
       creadoPor: `${jerarquiaFuncionario} ${nombreFuncionario}`,
       creadoPorId: currentUser?.id,
       creadoPorLegajo: currentUser?.badgeNumber || legajoFuncionario,
@@ -844,62 +993,361 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
           {/* Formulario Izquierda (7 columnas) */}
           <div className="lg:col-span-7 space-y-4">
             
-            {/* 1. SECCIÓN FIJADA: DEPARTAMENTAL, DEPENDENCIA, FUNCIONARIO INTERVINIENTE, CIUDAD Y MÓVIL */}
-            <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:via-blue-950/20 dark:to-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-              <div className="flex items-center justify-between pb-2 border-b border-blue-100 dark:border-slate-800">
+            {/* BARRA SUPERIOR: REDACCIÓN DE MEMO POLICIAL OFICIAL */}
+            <div className="flex flex-col gap-2.5 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/80 via-slate-50 to-indigo-50/60 dark:from-slate-900 dark:via-blue-950/20 dark:to-slate-900 border border-blue-200 dark:border-blue-900/40 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                    Departamental, Dependencia y Funcionario (Fijo / Predeterminado)
-                  </h4>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
-                  <BadgeCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                  <span>Fijado en PDF y Memos</span>
-                </span>
-              </div>
-
-              {/* JEFATURA DEPARTAMENTAL Y DEPENDENCIA (Actualizan el PDF inmediatamente) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span>Jefatura Departamental (Entre Ríos):</span>
-                    </label>
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
-                      Actualiza el PDF
+                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                      Memorándum Policial Oficial - Jefatura Departamental Victoria
+                    </span>
+                    <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                      Redacción y emisión de partes oficiales, notificaciones y despacho de comisión
                     </span>
                   </div>
-                  <select
-                    value={departamental}
-                    onChange={(e) => setDepartamental(e.target.value)}
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border-2 border-blue-300 dark:border-blue-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearForm}
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+                  title="Vaciar formulario para nuevo memo"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Limpiar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 1. ENCABEZADO INSTITUCIONAL DEPARTAMENTAL */}
+            <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:via-blue-950/20 dark:to-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-blue-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                    Encabezado Policial Institucional
+                  </h4>
+                </div>
+                {/* Selector de formato de encabezado */}
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-blue-200 dark:border-blue-800 text-[10.5px]">
+                  <button
+                    type="button"
+                    onClick={() => setEstiloEncabezado('tres_lineas')}
+                    className={`px-2 py-0.5 rounded-md font-semibold cursor-pointer transition-all ${
+                      estiloEncabezado === 'tres_lineas'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
                   >
-                    {DEPARTAMENTALES_PER.map((dep) => (
-                      <option key={dep} value={dep}>
-                        {dep}
-                      </option>
-                    ))}
-                  </select>
+                    3 Líneas Separadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEstiloEncabezado('dos_lineas_combinadas')}
+                    className={`px-2 py-0.5 rounded-md font-semibold cursor-pointer transition-all ${
+                      estiloEncabezado === 'dos_lineas_combinadas'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    2 Líneas (Combinado)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Línea 1 (DGDP / DGPD):
+                  </label>
+                  <input
+                    type="text"
+                    value={dgdpEncabezado}
+                    onChange={(e) => setDgdpEncabezado(e.target.value)}
+                    placeholder="DGDP- D VICTORIA."
+                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                  />
+                </div>
+
+                <div className={estiloEncabezado === 'dos_lineas_combinadas' ? 'sm:col-span-2' : ''}>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    {estiloEncabezado === 'dos_lineas_combinadas' ? 'Línea 2 (División y Comisaría combinadas):' : 'Línea 2 (División):'}
+                  </label>
+                  <input
+                    type="text"
+                    value={divisionEncabezado}
+                    onChange={(e) => setDivisionEncabezado(e.target.value)}
+                    placeholder="DIV. OP. Y SEGURIDAD PUBLICA"
+                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                  />
+                </div>
+
+                {estiloEncabezado === 'tres_lineas' && (
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Línea 3 (Dependencia / Comisaría):
+                    </label>
+                    <input
+                      type="text"
+                      value={dependencia}
+                      onChange={(e) => setDependencia(e.target.value)}
+                      placeholder="COMISARÍA QUINTO CUARTEL"
+                      className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Botones de selección rápida de Comisaría y Secciones en Victoria */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                <span className="text-[10px] text-slate-500 font-semibold">Dependencias Victoria:</span>
+                {DEPENDENCIAS_VICTORIA.slice(0, 8).map((depName) => (
+                  <button
+                    key={depName}
+                    type="button"
+                    onClick={() => {
+                      setDependencia(depName);
+                      if (estiloEncabezado === 'dos_lineas_combinadas') {
+                        setDivisionEncabezado(`Div. Operaciones y Seguridad Publica - ${depName}`);
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium border cursor-pointer transition-all ${
+                      dependencia === depName
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                    }`}
+                  >
+                    {depName
+                      .replace('COMISARÍA DE MINORIDAD Y VIOLENCIA FAMILIAR', 'C. Minoridad y V. Fam.')
+                      .replace('COMISARÍA ', 'C. ')
+                      .replace('SECCIÓN ', 'Sec. ')
+                      .replace('DIVISIÓN ', 'Div. ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. HECHO POLICIAL / CARÁTULA */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>"HECHO" (Carátula del Suceso)</span>
+                </label>
+                <div className="flex items-center gap-1 text-[10px]">
+                  <span className="text-slate-500 font-medium">Etiqueta:</span>
+                  <button
+                    type="button"
+                    onClick={() => setEtiquetaHecho('*\"HECHO\"*')}
+                    className={`px-2 py-0.5 rounded font-mono font-bold cursor-pointer ${
+                      etiquetaHecho === '*\"HECHO\"*'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    *"HECHO"*
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEtiquetaHecho('*Hecho*')}
+                    className={`px-2 py-0.5 rounded font-mono font-bold cursor-pointer ${
+                      etiquetaHecho === '*Hecho*'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    *Hecho*
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="text"
+                  value={hecho}
+                  onChange={(e) => setHecho(e.target.value)}
+                  placeholder="Ej: ROBO C/A/D, Sup. Desobediencia Judicial (incumplimiento Arresto Domiciliario...)"
+                  className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border-2 border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wide"
+                />
+              </div>
+
+              {/* Botones rápidos de hechos comunes */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {HECHOS_COMUNES.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => {
+                      setHecho(h);
+                      if (h.startsWith('Sup.') || h.startsWith('DESOBEDIENCIA')) {
+                        setEtiquetaHecho('*Hecho*');
+                        setTipoPersona('Detenido');
+                        setOrdenInvolucrado('arriba');
+                      } else if (h.includes('ROBO') || h.includes('HURTO')) {
+                        setEtiquetaHecho('*\"HECHO\"*');
+                        setTipoPersona('DAMNIFICADO');
+                        setOrdenInvolucrado('abajo');
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-all ${
+                      hecho === h
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                    }`}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. PERSONA INVOLUCRADA (DAMNIFICADO / DETENIDO / APREHENDIDO) */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Persona Involucrada ({tipoPersona})</span>
+                </h4>
+
+                <div className="flex items-center gap-2">
+                  {/* Selector de posición de la persona en el memo */}
+                  <span className="text-[10px] text-slate-500 font-medium">Ubicación:</span>
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[10.5px]">
+                    <button
+                      type="button"
+                      onClick={() => setOrdenInvolucrado('arriba')}
+                      className={`px-2 py-0.5 rounded-md font-semibold cursor-pointer ${
+                        ordenInvolucrado === 'arriba'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                      title="Ubicado tras Hecho (como en Desobediencia / Detenciones)"
+                    >
+                      ⬆️ Tras Hecho
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrdenInvolucrado('abajo')}
+                      className={`px-2 py-0.5 rounded-md font-semibold cursor-pointer ${
+                        ordenInvolucrado === 'abajo'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                      title="Ubicado tras Lugar (como en Robos y Hurtos)"
+                    >
+                      ⬇️ Tras Lugar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de selección de Rol: DAMNIFICADO / Detenido / Aprehendido / Imputado / etc. */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold text-slate-500">Rol en el suceso:</span>
+                {TIPOS_PERSONA_COMUNES.map((tp) => (
+                  <button
+                    key={tp}
+                    type="button"
+                    onClick={() => setTipoPersona(tp)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-all ${
+                      tipoPersona === tp
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                    }`}
+                  >
+                    *{tp}*
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Datos de la Persona (*{tipoPersona}* Apellido, Nombres, DNI, Edad):
+                </label>
+                <input
+                  type="text"
+                  value={damnificado}
+                  onChange={(e) => {
+                    setDamnificado(e.target.value);
+                    setVictima(e.target.value);
+                  }}
+                  placeholder="Ej: SÁNCHEZ Julio Alberto, DNI Nro. 47.676.118, de 20 años."
+                  className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* 4. FECHA, HORA Y LUGAR */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Fecha, Hora y Lugar del Suceso</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    *FECHA:* y *HORA:* del Suceso:
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={fechaHora}
+                    onChange={(e) => setFechaHora(e.target.value)}
+                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Dependencia / Comisaría / División:
+                    *LUGAR:* (Calle, Esquina o Barrio):
                   </label>
                   <input
                     type="text"
-                    value={dependencia}
-                    onChange={(e) => setDependencia(e.target.value)}
-                    placeholder="Ej: División Minoridad y Violencia Familiar"
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                    value={domicilioComision}
+                    onChange={(e) => setDomicilioComision(e.target.value)}
+                    placeholder="Calle Brassesco y calle Publica Barrio Quinto Cuartel."
+                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
+            </div>
 
-              {/* Jerarquía con Oficial Inspector, Nombre y Legajo fijados */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1 border-t border-blue-100/60 dark:border-slate-800/80">
+            {/* 5. RELATO CIRCUNSTANCIADO: SINOPSIS */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>*"SINOPSIS"* (Relato Circunstanciado)</span>
+                </h4>
+              </div>
+
+              <div>
+                <textarea
+                  rows={5}
+                  value={sinopsis}
+                  onChange={(e) => {
+                    setSinopsis(e.target.value);
+                    setRelatoHechos(e.target.value);
+                  }}
+                  placeholder="Relato circunstanciado de los hechos acontecidos..."
+                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed font-sans"
+                />
+              </div>
+            </div>
+
+            {/* 6. FIRMA INSTITUCIONAL (FDO.) */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Firma del Funcionario (Fdo.)</span>
+                </h4>
+                <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  Fdo. Jerarquía y Apellido
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Jerarquía Policial:
@@ -907,7 +1355,7 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                   <select
                     value={jerarquiaFuncionario}
                     onChange={(e) => setJerarquiaFuncionario(e.target.value)}
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
                   >
                     {JERARQUIAS_PER.map((rank) => (
                       <option key={rank} value={rank}>
@@ -925,292 +1373,10 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                     type="text"
                     value={nombreFuncionario}
                     onChange={(e) => setNombreFuncionario(e.target.value)}
-                    placeholder="Ej: Navoni Leonel"
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                    placeholder="BUSTOS Alejandro"
+                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
                   />
                 </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Legajo Policial:
-                  </label>
-                  <input
-                    type="text"
-                    value={legajoFuncionario}
-                    onChange={(e) => setLegajoFuncionario(e.target.value)}
-                    placeholder="Ej: 16.482"
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Ciudad y Móvil predeterminados */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1 border-t border-blue-100/60 dark:border-slate-800/80">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-blue-500" />
-                      <span>Ciudad / Localidad:</span>
-                    </label>
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
-                      Predeterminada
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    value={ciudadComision}
-                    onChange={(e) => setCiudadComision(e.target.value)}
-                    placeholder="Victoria"
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <Car className="w-3 h-3 text-blue-500" />
-                      <span>Móvil Policial:</span>
-                    </label>
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
-                      Predeterminado
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    value={movilPolicial}
-                    onChange={(e) => setMovilPolicial(e.target.value)}
-                    placeholder="Móvil Policial JP-412"
-                    className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 2. TIPO DE COMISIÓN POLICIAL: LAS 3 OPCIONES SOLICITADAS */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  Tipo de Comisión Policial
-                </label>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Selecciona la vía de comisionamiento
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {(
-                  [
-                    [
-                      'llamado_comisaria',
-                      'Llamado a Dependencia',
-                      'Llamada o comparecencia en guardia',
-                      PhoneCall,
-                    ],
-                    [
-                      'comision_911',
-                      'Comisión por 911',
-                      'Alerta radial de Sala de Comando 911',
-                      Radio,
-                    ],
-                    [
-                      'otra_comision',
-                      'Otra comisión',
-                      'Operativo o directiva especial',
-                      Briefcase,
-                    ],
-                  ] as const
-                ).map(([key, label, desc, IconComponent]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleChangeTemplate(key)}
-                    className={`p-3 rounded-xl text-left transition-all border cursor-pointer flex flex-col justify-between gap-2 ${
-                      tipoComision === key
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-500/20'
-                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <IconComponent
-                        className={`w-4 h-4 shrink-0 ${
-                          tipoComision === key ? 'text-white' : 'text-blue-500'
-                        }`}
-                      />
-                      <span className="font-bold text-xs">{label}</span>
-                    </div>
-                    <span
-                      className={`text-[10.5px] leading-tight ${
-                        tipoComision === key
-                          ? 'text-blue-100'
-                          : 'text-slate-500 dark:text-slate-400'
-                      }`}
-                    >
-                      {desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. DATOS DE LA COMISIÓN / PERSONAS */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 pb-2 border-b border-slate-100 dark:border-slate-800">
-                Datos de la Comisión y Personas Intervinientes
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                    Número de Memorándum / Parte:
-                  </label>
-                  <input
-                    type="text"
-                    value={numeroMemo}
-                    onChange={(e) => setNumeroMemo(e.target.value)}
-                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                    Fecha y Hora:
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={fechaHora}
-                    onChange={(e) => setFechaHora(e.target.value)}
-                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                    Víctima / Denunciante:
-                  </label>
-                  <input
-                    type="text"
-                    value={victima}
-                    onChange={(e) => setVictima(e.target.value)}
-                    placeholder="Apellido y Nombres de la víctima"
-                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                    Denunciado / Demandado:
-                  </label>
-                  <input
-                    type="text"
-                    value={victimario}
-                    onChange={(e) => setVictimario(e.target.value)}
-                    placeholder="Apellido y Nombres del denunciado"
-                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                    Lugar (Dirección de la Comisión):
-                  </label>
-                  <input
-                    type="text"
-                    value={domicilioComision}
-                    onChange={(e) => setDomicilioComision(e.target.value)}
-                    placeholder="Dirección exacta: Calle, altura, barrio o esquina"
-                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                    Oficio N° y Juzgado:
-                  </label>
-                  <input
-                    type="text"
-                    value={nroOficio ? `Oficio N° ${nroOficio} ${juzgadoInterviniente ? `(${juzgadoInterviniente})` : ''}` : ''}
-                    onChange={(e) => setNroOficio(e.target.value)}
-                    placeholder="Oficio N° 1086 (Juzgado de Familia N° 1)"
-                    className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 4. NOVEDAD CIRCUNSTANCIADA Y RESULTADO (SIN NOVEDAD PREDETERMINADO) */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  Novedad de la Comisión (Relato Circunstanciado)
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const tmpl = MEMO_TEMPLATES[tipoComision] || MEMO_TEMPLATES.llamado_comisaria;
-                    setRelatoHechos(
-                      tmpl.relatoSugerido(
-                        victima,
-                        victimario,
-                        domicilioComision || 'domicilio fijado',
-                        juzgadoInterviniente || 'Juzgado interviniente',
-                        nroOficio || 'S/N'
-                      )
-                    );
-                  }}
-                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Cargar texto sugerido</span>
-                </button>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                  Relato Pormenorizado de lo Acontecido:
-                </label>
-                <textarea
-                  rows={6}
-                  value={relatoHechos}
-                  onChange={(e) => setRelatoHechos(e.target.value)}
-                  placeholder="Detalle exactamente lo acontecido al arribo del funcionario policial, personas entrevistadas, condiciones observadas y medidas preventivas adoptadas..."
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed font-sans"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                    Resultado / Estado de Situación:
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setResultadoIntervencion('Sin novedad')}
-                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    <span>Fijar "Sin novedad"</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={resultadoIntervencion}
-                  onChange={(e) => setResultadoIntervencion(e.target.value)}
-                  placeholder="Sin novedad"
-                  className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                  Observaciones Complementarias (Opcional):
-                </label>
-                <input
-                  type="text"
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  placeholder="Datos adicionales relevantes, testigos o notas del funcionario..."
-                  className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
               </div>
             </div>
 
@@ -1364,20 +1530,20 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                 <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 pb-2 border-b border-black/10 dark:border-white/10">
                   <span className="font-bold flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400">
                     <MessageSquare className="w-4 h-4" />
-                    <span>Memo Resumido para WhatsApp</span>
+                    <span>Memo Operativo Victoria (*WhatsApp / Despacho*)</span>
                   </span>
                   <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
-                    Listo para grupo/superioridad
+                    Listo para grupo / superioridad
                   </span>
                 </div>
 
-                <div className="bg-white dark:bg-[#1f2c34] text-slate-900 dark:text-slate-100 p-4 rounded-xl rounded-tl-none shadow-sm text-xs leading-relaxed font-sans whitespace-pre-wrap select-all border border-black/5 dark:border-white/5">
+                <div className="bg-white dark:bg-[#1f2c34] text-slate-900 dark:text-slate-100 p-4 rounded-xl rounded-tl-none shadow-sm text-xs leading-relaxed font-mono whitespace-pre-wrap select-all border border-black/5 dark:border-white/5">
                   {generateWhatsAppMemoText()}
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    En <strong>Lugar</strong> figura la dirección exacta de la comisión.
+                    En <strong>Lugar</strong> figura la dirección exacta del suceso.
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -1439,11 +1605,15 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                   <strong>DEL FUNCIONARIO ACTUANTE:</strong> {jerarquiaFuncionario} {nombreFuncionario}
                   {legajoFuncionario ? ` (Leg. N° ${legajoFuncionario})` : ''} - {movilPolicial}
                 </p>
-                <p><strong>OBJETO:</strong> {MEMO_TEMPLATES[tipoComision]?.titulo || 'Parte de Comisión'}</p>
-                {victima && (
+                <p><strong>OBJETO:</strong> {hecho || MEMO_TEMPLATES[tipoComision]?.titulo || 'Parte de Comisión'}</p>
+                {damnificado && (
                   <p>
-                    <strong>REF:</strong> Autos <em>"{victima} c/ {victimario || 'DENUNCIADO'}"</em>
-                    {nroOficio ? ` - Oficio N° ${nroOficio}` : ''} {juzgadoInterviniente ? `(${juzgadoInterviniente})` : ''}
+                    <strong>DAMNIFICADO / VÍCTIMA:</strong> {damnificado}
+                  </p>
+                )}
+                {nroOficio && (
+                  <p>
+                    <strong>OFICIO JUDICIAL:</strong> N° {nroOficio} {juzgadoInterviniente ? `(${juzgadoInterviniente})` : ''}
                   </p>
                 )}
               </div>
@@ -1451,22 +1621,16 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
               {/* Cuerpo del Parte */}
               <div className="space-y-3 pt-2 text-[11.5px] text-justify font-sans">
                 <p>
-                  Tengo el agrado de dirigirme a Ud., a fin de elevar el presente parte de comisión policial llevado a cabo en el domicilio sito en calle <strong>{domicilioComision || '____________________'}</strong>, localidad de <strong>{ciudadComision}</strong>.
+                  Tengo el agrado de dirigirme a Ud., a fin de elevar el presente parte de comisión policial llevado a cabo en el lugar sito en <strong>{domicilioComision || '____________________'}</strong>, localidad de <strong>{ciudadComision}</strong>.
                 </p>
 
                 <p className="whitespace-pre-wrap leading-relaxed">
-                  {relatoHechos || 'Se comisionó al domicilio indicado a los efectos de dar cumplimiento a directivas policiales en la zona...'}
+                  {sinopsis || relatoHechos || 'Se comisionó al lugar indicado a los efectos de dar cumplimiento a directivas policiales en la zona...'}
                 </p>
 
                 <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-300 font-sans text-[11px]">
                   <strong>Resultado de la Comisión:</strong> {resultadoIntervencion || 'Sin novedad'}
                 </div>
-
-                {observaciones && (
-                  <p className="text-[11px] text-slate-700 italic">
-                    <strong>Observaciones:</strong> {observaciones}
-                  </p>
-                )}
               </div>
 
               {/* FIRMA ÚNICA: SOLO FIRMA DEL FUNCIONARIO A CARGO CON DEPARTAMENTAL ACTUALIZADA */}
@@ -1595,8 +1759,19 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                       </span>
                     </div>
 
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                        {memo.hecho || MEMO_TEMPLATES[memo.tipoComision]?.titulo || 'Parte Policial'}
+                      </span>
+                    </div>
+
                     <h5 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
-                      {memo.victima}
+                      {memo.tipoPersona && (
+                        <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
+                          *{memo.tipoPersona}*
+                        </span>
+                      )}
+                      {memo.personaDetalle || memo.damnificado || memo.victima}
                     </h5>
                     {memo.victimario && (
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -1605,8 +1780,7 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                     )}
 
                     <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pt-1">
-                      <div><strong>Jefatura:</strong> {memo.jefatura || 'Policía de Entre Ríos'}</div>
-                      <div><strong>Comisión:</strong> {MEMO_TEMPLATES[memo.tipoComision]?.titulo || memo.tipoComision}</div>
+                      <div><strong>Dependencia:</strong> {memo.dependencia}</div>
                       <div>
                         <strong>Lugar:</strong>{' '}
                         {memo.domicilioComision
@@ -1614,13 +1788,14 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                           : (memo.ciudadComision || 'No especificado')}
                       </div>
                       {memo.nroOficio && <div><strong>Oficio:</strong> {memo.nroOficio}</div>}
-                      <div><strong>Funcionario a cargo:</strong> {memo.oficialACargo} ({memo.movilPolicial})</div>
+                      <div>
+                        <strong>Firma:</strong> Fdo. {memo.jerarquia || ''} {memo.nombre || memo.oficialACargo}
+                      </div>
                       {memo.creadoPor && (
                         <div className="text-[10px] text-slate-500 dark:text-slate-400">
                           <strong>Cargado por:</strong> {memo.creadoPor}
                         </div>
                       )}
-                      <div><strong>Resultado:</strong> {memo.resultadoIntervencion || 'Sin novedad'}</div>
                     </div>
                   </div>
 
@@ -1628,30 +1803,27 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         onClick={() => {
-                          const text = generateWhatsAppMemoText({
-                            numeroMemo: memo.numeroMemo,
-                            departamental: memo.jefatura,
+                          const text = generateVictoriaOperationalMemo({
+                            dgdpEncabezado: memo.dgdpEncabezado,
+                            divisionEncabezado: memo.divisionEncabezado,
                             dependencia: memo.dependencia,
+                            estiloEncabezado: memo.estiloEncabezado,
+                            hecho: memo.hecho || memo.tipoComision,
                             fechaHora: memo.fechaHora,
-                            movilPolicial: memo.movilPolicial,
+                            domicilioComision: memo.domicilioComision,
+                            tipoPersona: memo.tipoPersona,
+                            personaDetalle: memo.personaDetalle || memo.damnificado || memo.victima,
+                            damnificado: memo.damnificado || memo.victima,
+                            ordenInvolucrado: memo.ordenInvolucrado,
+                            sinopsis: memo.sinopsis || memo.relatoHechos,
                             jerarquia: memo.jerarquia,
                             nombre: memo.nombre,
-                            legajo: memo.legajo,
-                            domicilioComision: memo.domicilioComision,
-                            ciudadComision: memo.ciudadComision,
-                            tipoComision: memo.tipoComision,
-                            victima: memo.victima,
-                            victimario: memo.victimario,
-                            nroOficio: memo.nroOficio,
-                            relatoHechos: memo.relatoHechos,
-                            resultadoIntervencion: memo.resultadoIntervencion,
-                            observaciones: memo.observaciones,
                           });
                           navigator.clipboard.writeText(text);
-                          alert('¡Memo resumido para WhatsApp copiado al portapapeles!');
+                          alert('¡Memo formato oficial Victoria copiado al portapapeles!');
                         }}
                         className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                        title="Copiar formato resumido para WhatsApp"
+                        title="Copiar memo en formato oficial Victoria para WhatsApp"
                       >
                         <Copy className="w-3.5 h-3.5" />
                         <span>Copiar WA</span>
@@ -1659,24 +1831,21 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
 
                       <button
                         onClick={() => {
-                          const text = generateWhatsAppMemoText({
-                            numeroMemo: memo.numeroMemo,
-                            departamental: memo.jefatura,
+                          const text = generateVictoriaOperationalMemo({
+                            dgdpEncabezado: memo.dgdpEncabezado,
+                            divisionEncabezado: memo.divisionEncabezado,
                             dependencia: memo.dependencia,
+                            estiloEncabezado: memo.estiloEncabezado,
+                            hecho: memo.hecho || memo.tipoComision,
                             fechaHora: memo.fechaHora,
-                            movilPolicial: memo.movilPolicial,
+                            domicilioComision: memo.domicilioComision,
+                            tipoPersona: memo.tipoPersona,
+                            personaDetalle: memo.personaDetalle || memo.damnificado || memo.victima,
+                            damnificado: memo.damnificado || memo.victima,
+                            ordenInvolucrado: memo.ordenInvolucrado,
+                            sinopsis: memo.sinopsis || memo.relatoHechos,
                             jerarquia: memo.jerarquia,
                             nombre: memo.nombre,
-                            legajo: memo.legajo,
-                            domicilioComision: memo.domicilioComision,
-                            ciudadComision: memo.ciudadComision,
-                            tipoComision: memo.tipoComision,
-                            victima: memo.victima,
-                            victimario: memo.victimario,
-                            nroOficio: memo.nroOficio,
-                            relatoHechos: memo.relatoHechos,
-                            resultadoIntervencion: memo.resultadoIntervencion,
-                            observaciones: memo.observaciones,
                           });
                           window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
                         }}
@@ -1706,7 +1875,6 @@ ${observaciones ? `\n6. OBSERVACIONES COMPLEMENTARIAS:\n${observaciones}` : ''}
                             motivoComision: memo.motivoComision,
                             relatoHechos: memo.relatoHechos,
                             resultadoIntervencion: memo.resultadoIntervencion || 'Sin novedad',
-                            observaciones: memo.observaciones,
                           });
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');

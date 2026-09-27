@@ -24,9 +24,12 @@ import {
   Info,
   ArrowLeft,
   Target,
+  AlertTriangle,
+  Edit,
 } from 'lucide-react';
 import L from 'leaflet';
 import { JudicialMeasure, UserProfile } from '../types';
+import { EditVictimLocationModal } from './EditVictimLocationModal';
 import {
   resolveMeasureLocation,
   calculateDistanceKm,
@@ -50,6 +53,16 @@ interface OperationalMapTabProps {
   initialSelectedMeasure?: JudicialMeasure | null;
   userLocation?: GeoLocation | null;
   onBackToMeasures?: () => void;
+  onUpdateMeasureLocation?: (
+    measure: JudicialMeasure,
+    updated: {
+      domicilioVictima: string;
+      ciudadVictima: string;
+      latVictima: number;
+      lngVictima: number;
+      radioExclusionMetros: number;
+    }
+  ) => Promise<void> | void;
 }
 
 export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
@@ -61,6 +74,7 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
   initialSelectedMeasure,
   userLocation: userLocationProp,
   onBackToMeasures,
+  onUpdateMeasureLocation,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -92,6 +106,9 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
     return null;
   });
 
+  // Location edit modal state
+  const [isEditLocationOpen, setIsEditLocationOpen] = useState(false);
+
   // When coming from "Ubicación y Ruta" on a card, onlyShowSelected defaults to true
   const [onlyShowSelected, setOnlyShowSelected] = useState<boolean>(() => {
     return Boolean(initialSelectedMeasure || initialSelectedMeasureId);
@@ -102,6 +119,27 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
   const [isCalculatingRoute, setIsCalculatingRoute] = useState<boolean>(false);
 
   const [viewMode, setViewMode] = useState<'interactive' | 'google_maps'>('interactive');
+
+  const handleSaveLocation = async (updated: {
+    domicilioVictima: string;
+    ciudadVictima: string;
+    latVictima: number;
+    lngVictima: number;
+    radioExclusionMetros: number;
+  }) => {
+    if (!selectedMeasure) return;
+    const nextMeasure: JudicialMeasure = {
+      ...selectedMeasure,
+      ...updated,
+    };
+    setSelectedMeasure(nextMeasure);
+    if (onUpdateMeasureLocation) {
+      await onUpdateMeasureLocation(selectedMeasure, updated);
+    }
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView([updated.latVictima, updated.lngVictima], 16);
+    }
+  };
 
   // Update selected measure and isolation if initialSelectedMeasure or initialSelectedMeasureId updates
   useEffect(() => {
@@ -215,6 +253,12 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
     }
 
     const loc = resolveMeasureLocation(selectedMeasure);
+    if (!loc.hasLocation) {
+      setRoadRoute(null);
+      setIsCalculatingRoute(false);
+      return;
+    }
+
     const start = userLocation || DEFAULT_PER_CENTER;
 
     let isMounted = true;
@@ -244,6 +288,20 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
     if (!selectedMeasure) return null;
     const loc = resolveMeasureLocation(selectedMeasure);
     const exp = getMeasureExpirationInfo(selectedMeasure.fechaHasta);
+
+    if (!loc.hasLocation) {
+      return {
+        measure: selectedMeasure,
+        loc,
+        exp,
+        distKm: null,
+        patrolTime: null,
+        walkTime: null,
+        navUrl: '',
+        isRealRoad: false,
+        roadSummary: undefined,
+      };
+    }
     
     // Road distance and time when calculated, fallback to Haversine
     const distKm = roadRoute ? roadRoute.distanceKm : (
@@ -362,85 +420,91 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
       const loc = resolveMeasureLocation(selectedMeasure);
       const exp = getMeasureExpirationInfo(selectedMeasure.fechaHasta);
 
-      // Distinctive Destination Pin with victim badge and pulsing radar
-      const destinationHtml = `
-        <div class="relative flex items-center justify-center cursor-pointer">
-          <div class="absolute w-10 h-10 rounded-full bg-rose-500/30 animate-ping"></div>
-          <div class="w-9 h-9 rounded-full shadow-xl flex items-center justify-center text-white border-2 border-white bg-rose-600 ring-2 ring-rose-500/50">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
+      if (loc.hasLocation) {
+        // Distinctive Destination Pin with victim badge and pulsing radar
+        const destinationHtml = `
+          <div class="relative flex items-center justify-center cursor-pointer">
+            <div class="absolute w-10 h-10 rounded-full bg-rose-500/30 animate-ping"></div>
+            <div class="w-9 h-9 rounded-full shadow-xl flex items-center justify-center text-white border-2 border-white bg-rose-600 ring-2 ring-rose-500/50">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+            <div class="absolute -bottom-1 w-2.5 h-2.5 rounded-full bg-slate-900/80"></div>
           </div>
-          <div class="absolute -bottom-1 w-2.5 h-2.5 rounded-full bg-slate-900/80"></div>
-        </div>
-      `;
+        `;
 
-      const destinationIcon = L.divIcon({
-        className: 'custom-measure-destination-marker',
-        html: destinationHtml,
-        iconSize: [36, 36],
-        iconAnchor: [18, 32],
-      });
+        const destinationIcon = L.divIcon({
+          className: 'custom-measure-destination-marker',
+          html: destinationHtml,
+          iconSize: [36, 36],
+          iconAnchor: [18, 32],
+        });
 
-      const destMarker = L.marker([loc.lat, loc.lng], {
-        icon: destinationIcon,
-        zIndexOffset: 900,
-      }).addTo(markersLayerRef.current);
+        const destMarker = L.marker([loc.lat, loc.lng], {
+          icon: destinationIcon,
+          zIndexOffset: 900,
+        }).addTo(markersLayerRef.current);
 
-      destMarker.bindPopup(`
-        <div class="p-1.5 text-xs max-w-xs space-y-1">
-          <div class="font-extrabold text-sm text-slate-900">${selectedMeasure.victima}</div>
-          <div class="text-[11px] text-slate-600"><strong>Domicilio Protegido:</strong> ${loc.direccion}, ${loc.ciudad}</div>
-          <div class="text-[11px] text-rose-600 font-bold"><strong>Radio de Exclusión:</strong> ${loc.radioMetros} metros</div>
-          <div class="text-[11px] text-slate-600"><strong>Oficio N°:</strong> ${selectedMeasure.nroOficio} (${selectedMeasure.provenienteDe})</div>
-          <div class="text-[11px] text-slate-600"><strong>Denunciado:</strong> ${selectedMeasure.victimario}</div>
-        </div>
-      `).openPopup();
+        destMarker.bindPopup(`
+          <div class="p-1.5 text-xs max-w-xs space-y-1">
+            <div class="font-extrabold text-sm text-slate-900">${selectedMeasure.victima}</div>
+            <div class="text-[11px] text-slate-600"><strong>Domicilio Protegido:</strong> ${loc.direccion}, ${loc.ciudad}</div>
+            <div class="text-[11px] text-rose-600 font-bold"><strong>Radio de Exclusión:</strong> ${loc.radioMetros} metros</div>
+            <div class="text-[11px] text-slate-600"><strong>Oficio N°:</strong> ${selectedMeasure.nroOficio} (${selectedMeasure.provenienteDe})</div>
+            <div class="text-[11px] text-slate-600"><strong>Denunciado:</strong> ${selectedMeasure.victimario}</div>
+          </div>
+        `).openPopup();
 
-      // Render Perimeter exclusion circle
-      circleLayerRef.current = L.circle([loc.lat, loc.lng], {
-        radius: loc.radioMetros,
-        color: '#dc2626',
-        fillColor: '#ef4444',
-        fillOpacity: 0.18,
-        weight: 2,
-        dashArray: '6, 6',
-      }).addTo(map);
+        // Render Perimeter exclusion circle
+        circleLayerRef.current = L.circle([loc.lat, loc.lng], {
+          radius: loc.radioMetros,
+          color: '#dc2626',
+          fillColor: '#ef4444',
+          fillOpacity: 0.18,
+          weight: 2,
+          dashArray: '6, 6',
+        }).addTo(map);
 
-      // Render Traveled Route from officer to victim
-      const startPoint = userLocation || DEFAULT_PER_CENTER;
-      const polylineCoords: [number, number][] = roadRoute?.coordinates && roadRoute.coordinates.length > 0
-        ? roadRoute.coordinates
-        : [
-            [startPoint.lat, startPoint.lng],
-            [loc.lat, loc.lng],
-          ];
+        // Render Traveled Route from officer to victim
+        const startPoint = userLocation || DEFAULT_PER_CENTER;
+        const polylineCoords: [number, number][] = roadRoute?.coordinates && roadRoute.coordinates.length > 0
+          ? roadRoute.coordinates
+          : [
+              [startPoint.lat, startPoint.lng],
+              [loc.lat, loc.lng],
+            ];
 
-      // Route Glow Underlay
-      routeGlowLayerRef.current = L.polyline(polylineCoords, {
-        color: '#60a5fa',
-        weight: 8,
-        opacity: 0.35,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
+        // Route Glow Underlay
+        routeGlowLayerRef.current = L.polyline(polylineCoords, {
+          color: '#60a5fa',
+          weight: 8,
+          opacity: 0.35,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(map);
 
-      // Main Road Navigation Line
-      routeLayerRef.current = L.polyline(polylineCoords, {
-        color: '#1d4ed8',
-        weight: 5,
-        opacity: 0.95,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
+        // Main Road Navigation Line
+        routeLayerRef.current = L.polyline(polylineCoords, {
+          color: '#1d4ed8',
+          weight: 5,
+          opacity: 0.95,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(map);
 
-      // Fit map bounds to show both officer, victim and all road curves
-      const bounds = L.latLngBounds(polylineCoords);
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+        // Fit map bounds to show both officer, victim and all road curves
+        const bounds = L.latLngBounds(polylineCoords);
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+      } else {
+        const startPoint = userLocation || DEFAULT_PER_CENTER;
+        map.setView([startPoint.lat, startPoint.lng], 14);
+      }
     } else {
-      // 3. MULTI-MEASURE MODE: Render all filtered measures
+      // 3. MULTI-MEASURE MODE: Render all filtered measures with user-defined location
       filteredItems.forEach(({ measure, loc, exp }) => {
+        if (!loc.hasLocation) return;
         const isSelected = selectedMeasure?.id === measure.id;
 
         // Color based on status
@@ -495,45 +559,46 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
       // If a measure is selected in multi-measure mode, also render its route line and perimeter circle
       if (selectedMeasure) {
         const loc = resolveMeasureLocation(selectedMeasure);
+        if (loc.hasLocation) {
+          // Render Perimeter circle
+          circleLayerRef.current = L.circle([loc.lat, loc.lng], {
+            radius: loc.radioMetros,
+            color: '#dc2626',
+            fillColor: '#ef4444',
+            fillOpacity: 0.15,
+            weight: 2,
+            dashArray: '6, 6',
+          }).addTo(map);
 
-        // Render Perimeter circle
-        circleLayerRef.current = L.circle([loc.lat, loc.lng], {
-          radius: loc.radioMetros,
-          color: '#dc2626',
-          fillColor: '#ef4444',
-          fillOpacity: 0.15,
-          weight: 2,
-          dashArray: '6, 6',
-        }).addTo(map);
+          // Render Route line from officer to victim
+          const startPoint = userLocation || DEFAULT_PER_CENTER;
+          const polylineCoords: [number, number][] = roadRoute?.coordinates && roadRoute.coordinates.length > 0
+            ? roadRoute.coordinates
+            : [
+                [startPoint.lat, startPoint.lng],
+                [loc.lat, loc.lng],
+              ];
 
-        // Render Route line from officer to victim
-        const startPoint = userLocation || DEFAULT_PER_CENTER;
-        const polylineCoords: [number, number][] = roadRoute?.coordinates && roadRoute.coordinates.length > 0
-          ? roadRoute.coordinates
-          : [
-              [startPoint.lat, startPoint.lng],
-              [loc.lat, loc.lng],
-            ];
+          routeGlowLayerRef.current = L.polyline(polylineCoords, {
+            color: '#60a5fa',
+            weight: 7,
+            opacity: 0.35,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(map);
 
-        routeGlowLayerRef.current = L.polyline(polylineCoords, {
-          color: '#60a5fa',
-          weight: 7,
-          opacity: 0.35,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(map);
+          routeLayerRef.current = L.polyline(polylineCoords, {
+            color: '#2563eb',
+            weight: 4,
+            opacity: 0.9,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(map);
 
-        routeLayerRef.current = L.polyline(polylineCoords, {
-          color: '#2563eb',
-          weight: 4,
-          opacity: 0.9,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(map);
-
-        // Fit map bounds to show both officer and victim
-        const bounds = L.latLngBounds(polylineCoords);
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+          // Fit map bounds to show both officer and victim
+          const bounds = L.latLngBounds(polylineCoords);
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        }
       }
     }
   }, [filteredItems, selectedMeasure, userLocation, viewMode, onlyShowSelected, roadRoute]);
@@ -1010,22 +1075,44 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
                   </p>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-800/80 text-xs space-y-1">
-                  <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
-                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                    <span>{resolveMeasureLocation(selectedMeasure).direccion}, {resolveMeasureLocation(selectedMeasure).ciudad}</span>
+                {resolveMeasureLocation(selectedMeasure).hasLocation ? (
+                  <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-800/80 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
+                      <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      <span>{resolveMeasureLocation(selectedMeasure).direccion}, {resolveMeasureLocation(selectedMeasure).ciudad}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <span>Radio de exclusión:</span>
+                      <strong className="text-rose-600 dark:text-rose-400 font-mono">{resolveMeasureLocation(selectedMeasure).radioMetros}m</strong>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>Distancia y patrulla:</span>
+                      <strong className="text-blue-600 dark:text-blue-400 font-mono">
+                        {selectedInfo?.distKm ? formatDistance(selectedInfo.distKm) : '---'} (~{selectedInfo?.patrolTime?.text || '---'})
+                      </strong>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span>Radio de exclusión:</span>
-                    <strong className="text-rose-600 dark:text-rose-400 font-mono">{resolveMeasureLocation(selectedMeasure).radioMetros}m</strong>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-xs space-y-1 text-amber-800 dark:text-amber-200">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>Sin ubicación cargada por el usuario</span>
+                    </div>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                      Esta medida no tiene punto ni coordenadas fijadas en el mapa.
+                    </p>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                    <span>Distancia y patrulla:</span>
-                    <strong className="text-blue-600 dark:text-blue-400 font-mono">
-                      {selectedInfo?.distKm ? formatDistance(selectedInfo.distKm) : '---'} (~{selectedInfo?.patrolTime?.text || '---'})
-                    </strong>
-                  </div>
-                </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsEditLocationOpen(true)}
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  title="Cargar o modificar la ubicación exacta en Google Maps"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>{resolveMeasureLocation(selectedMeasure).hasLocation ? 'Modificar Ubicación en Google Maps' : 'Cargar Ubicación en Google Maps'}</span>
+                </button>
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
@@ -1070,7 +1157,7 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
                       key={measure.id}
                       onClick={() => {
                         setSelectedMeasure(measure);
-                        if (mapInstanceRef.current) {
+                        if (loc.hasLocation && mapInstanceRef.current) {
                           mapInstanceRef.current.setView([loc.lat, loc.lng], 15);
                         }
                       }}
@@ -1093,19 +1180,29 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
                           </div>
 
                           <div className="text-right shrink-0">
-                            <span className="font-mono text-xs font-black text-blue-600 dark:text-blue-400 block">
-                              {formatDistance(distanceKm)}
-                            </span>
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                              ~{patrolEta.text}
-                            </span>
+                            {loc.hasLocation ? (
+                              <>
+                                <span className="font-mono text-xs font-black text-blue-600 dark:text-blue-400 block">
+                                  {formatDistance(distanceKm)}
+                                </span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                  ~{patrolEta.text}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                                Sin ubicación
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         {/* Middle: Address & Measure Type */}
                         <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
                           <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
-                          <span className="truncate">{loc.direccion}</span>
+                          <span className="truncate">
+                            {loc.hasLocation ? loc.direccion : 'Sin ubicación cargada por el usuario'}
+                          </span>
                         </div>
                       </div>
 
@@ -1151,6 +1248,15 @@ export const OperationalMapTab: React.FC<OperationalMapTabProps> = ({
 
       </div>
 
+      {/* Modal de Modificación de Ubicación en Google Maps */}
+      {isEditLocationOpen && selectedMeasure && (
+        <EditVictimLocationModal
+          isOpen={isEditLocationOpen}
+          onClose={() => setIsEditLocationOpen(false)}
+          measure={selectedMeasure}
+          onSaveLocation={handleSaveLocation}
+        />
+      )}
     </div>
   );
 };

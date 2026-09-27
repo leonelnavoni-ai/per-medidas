@@ -128,19 +128,117 @@ export function getGoogleMapsDirUrl(
 }
 
 /**
- * Generates Google Maps search / place URL explicitly targeted in Victoria, Entre Ríos
+ * Generates Google Maps search / place URL explicitly targeted by coordinates
+ * Ensures Google Maps drops a precise GPS pin without street search failure
  */
 export function getGoogleMapsPlaceUrl(
   lat: number,
   lng: number,
-  label?: string,
-  city: string = 'Victoria'
+  _label?: string,
+  _city: string = 'Victoria'
 ): string {
-  if (label) {
-    const fullQuery = `${label}, ${city}, Entre Ríos, Argentina`;
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullQuery)}`;
-  }
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}
+
+/**
+ * Validates whether GPS coordinates are real geographical coordinates in Argentina / South America
+ */
+export function isValidGpsCoordinate(lat?: number, lng?: number): boolean {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return false;
+  // Valid coordinates covering Argentina and surroundings
+  return lat >= -56 && lat <= -20 && lng >= -75 && lng <= -50;
+}
+
+/**
+ * Parses raw GPS coordinates or Google Maps URLs into { lat, lng }
+ * Examples supported:
+ * - "-32.6184, -60.1558"
+ * - "-32.6184 -60.1558"
+ * - "https://www.google.com/maps/place/.../@-32.6184,-60.1558,17z/..."
+ * - "https://maps.google.com/?q=-32.6184,-60.1558"
+ * - "https://www.google.com/maps/search/?api=1&query=-32.6184,-60.1558"
+ */
+export function parseCoordsOrGoogleMapsLink(input: string): { lat: number; lng: number } | null {
+  if (!input || typeof input !== 'string') return null;
+  const trimmed = input.trim();
+
+  // 1. Google Maps URL pattern: /@(-?\d+\.\d+),(-?\d+\.\d+)
+  const atMatch = trimmed.match(/@(-?\d+\.\d{3,}),(-?\d+\.\d{3,})/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
+    if (isValidGpsCoordinate(lat, lng)) {
+      return { lat, lng };
+    }
+  }
+
+  // 2. Query parameter pattern: q=(-?\d+\.\d+),(-?\d+\.\d+) or query=... or ll=...
+  const queryMatch = trimmed.match(/(?:q|query|ll|destination)=(-?\d+\.\d{3,}),(-?\d+\.\d{3,})/);
+  if (queryMatch) {
+    const lat = parseFloat(queryMatch[1]);
+    const lng = parseFloat(queryMatch[2]);
+    if (isValidGpsCoordinate(lat, lng)) {
+      return { lat, lng };
+    }
+  }
+
+  // 3. /place/(-?\d+\.\d+),(-?\d+\.\d+)
+  const placeMatch = trimmed.match(/place\/(-?\d+\.\d{3,}),(-?\d+\.\d{3,})/);
+  if (placeMatch) {
+    const lat = parseFloat(placeMatch[1]);
+    const lng = parseFloat(placeMatch[2]);
+    if (isValidGpsCoordinate(lat, lng)) {
+      return { lat, lng };
+    }
+  }
+
+  // 4. Raw coordinate pair: "-32.6184, -60.1558" or "-32.6184 -60.1558" or "(-32.6184, -60.1558)"
+  const clean = trimmed.replace(/[()[\]{}]/g, '');
+  const rawMatch = clean.match(/(-?\d{1,2}\.\d{3,})[\s,;\/]+(-?\d{1,3}\.\d{3,})/);
+  if (rawMatch) {
+    const lat = parseFloat(rawMatch[1]);
+    const lng = parseFloat(rawMatch[2]);
+    if (isValidGpsCoordinate(lat, lng)) {
+      return { lat, lng };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Reverse geocoding lookup using OpenStreetMap Nominatim with fast fallback
+ */
+export async function reverseGeocodeOnline(lat: number, lng: number): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        signal: controller.signal,
+        headers: { 'Accept-Language': 'es' }
+      }
+    );
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.address) {
+      const road = data.address.road || data.address.pedestrian || data.address.street;
+      const houseNumber = data.address.house_number;
+      const suburb = data.address.suburb || data.address.neighbourhood || data.address.quarter;
+      if (road && houseNumber) {
+        return `${road} ${houseNumber}${suburb ? `, ${suburb}` : ''}`;
+      } else if (road) {
+        return `${road}${suburb ? `, ${suburb}` : ''}`;
+      } else if (data.name) {
+        return data.name;
+      }
+    }
+  } catch (e) {
+    // Timeout or network error; gracefully ignore
+  }
+  return null;
 }
 
 /**
@@ -198,7 +296,22 @@ export function geocodeVictoriaAddress(direccion?: string, ciudad?: string): Geo
 }
 
 /**
- * Ensures a measure has coordinates and address assigned in Victoria, Entre Ríos
+ * Checks whether a measure has a real user-defined location or coordinates
+ */
+export function hasMeasureLocation(measure?: JudicialMeasure | null): boolean {
+  if (!measure) return false;
+  const hasCoords =
+    typeof measure.latVictima === 'number' &&
+    typeof measure.lngVictima === 'number' &&
+    isValidGpsCoordinate(measure.latVictima, measure.lngVictima);
+  const hasAddr = Boolean(measure.domicilioVictima && measure.domicilioVictima.trim().length > 0);
+  return hasCoords || hasAddr;
+}
+
+/**
+ * Resolves a measure location.
+ * NO CARGA UBICACIÓN AUTOMÁTICAMENTE: Si el usuario no cargó dirección o coordenadas,
+ * hasLocation será false y no se inventan calles ni pines ficticios.
  */
 export function resolveMeasureLocation(measure: JudicialMeasure): {
   direccion: string;
@@ -206,56 +319,50 @@ export function resolveMeasureLocation(measure: JudicialMeasure): {
   lat: number;
   lng: number;
   radioMetros: number;
+  hasLocation: boolean;
 } {
-  // Normalize city: reject Paraná or Concordia that were caused by previous bug
   let cleanCity = measure.ciudadVictima?.trim() || 'Victoria';
   if (cleanCity === 'Paraná' || cleanCity === 'Concordia') {
     cleanCity = 'Victoria';
   }
 
-  // Check if measure has explicit valid coordinates in Victoria
+  // 1. Coordenadas explícitas cargadas por el usuario
   if (
-    measure.latVictima &&
-    measure.lngVictima &&
-    measure.domicilioVictima &&
-    isVictoriaCoordinates(measure.latVictima, measure.lngVictima)
+    typeof measure.latVictima === 'number' &&
+    typeof measure.lngVictima === 'number' &&
+    isValidGpsCoordinate(measure.latVictima, measure.lngVictima)
   ) {
     return {
-      direccion: measure.domicilioVictima,
+      direccion: measure.domicilioVictima?.trim() || 'Coordenadas GPS fijadas',
       ciudad: cleanCity,
       lat: measure.latVictima,
       lng: measure.lngVictima,
       radioMetros: measure.radioExclusionMetros || 200,
+      hasLocation: true,
     };
   }
 
-  // If user provided a custom address in Victoria but no coordinates, or coordinates were invalid/stale
+  // 2. Domicilio escrito por el usuario
   if (measure.domicilioVictima && measure.domicilioVictima.trim()) {
     const coords = geocodeVictoriaAddress(measure.domicilioVictima, cleanCity);
     return {
-      direccion: measure.domicilioVictima,
+      direccion: measure.domicilioVictima.trim(),
       ciudad: cleanCity,
       lat: coords.lat,
       lng: coords.lng,
       radioMetros: measure.radioExclusionMetros || (measure.tipoMedida?.toLowerCase().includes('exclus') ? 300 : 200),
+      hasLocation: true,
     };
   }
 
-  // Deterministic fallback based on measure id/victim name, strictly within Victoria
-  const hash = (measure.id + measure.victima).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const fallbackIndex = Math.abs(hash) % DEFAULT_ADDRESSES_VICTORIA.length;
-  const template = DEFAULT_ADDRESSES_VICTORIA[fallbackIndex];
-
-  // Slight jitter to prevent overlapping pins if multiple items pick the same template
-  const jitterLat = ((hash % 17) - 8) * 0.0008;
-  const jitterLng = (((hash * 3) % 19) - 9) * 0.0008;
-
+  // 3. SIN UBICACIÓN: No inventar calles ni pines falsos
   return {
-    direccion: template.direccion,
+    direccion: '',
     ciudad: cleanCity,
-    lat: template.lat + jitterLat,
-    lng: template.lng + jitterLng,
-    radioMetros: measure.radioExclusionMetros || (measure.tipoMedida?.toLowerCase().includes('exclus') ? 300 : 200),
+    lat: DEFAULT_PER_CENTER.lat,
+    lng: DEFAULT_PER_CENTER.lng,
+    radioMetros: measure.radioExclusionMetros || 200,
+    hasLocation: false,
   };
 }
 

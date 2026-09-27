@@ -25,9 +25,12 @@ import {
   Sparkles,
   MessageCircle,
   MapPin,
+  ExternalLink,
+  Compass,
 } from 'lucide-react';
 import { JudicialMeasure, DriveConnectionState, UserProfile } from '../types';
 import { WhatsAppShareModal } from './WhatsAppShareModal';
+import { EditVictimLocationModal } from './EditVictimLocationModal';
 import { formatBytes } from '../utils/formatters';
 import {
   parseDateFlexible,
@@ -37,7 +40,13 @@ import {
   calculateDaysDiff,
   formatFriendlySpanishDate,
 } from '../utils/dateCalculations';
-import { geocodeVictoriaAddress } from '../utils/geoUtils';
+import {
+  geocodeVictoriaAddress,
+  parseCoordsOrGoogleMapsLink,
+  isValidGpsCoordinate,
+  getGoogleMapsPlaceUrl,
+  reverseGeocodeOnline,
+} from '../utils/geoUtils';
 
 interface MeasureModalProps {
   isOpen: boolean;
@@ -108,6 +117,37 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Google Maps / Location picker states
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [googlePasteInput, setGooglePasteInput] = useState('');
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
+
+  const handleApplyGoogleMapsInForm = () => {
+    if (!googlePasteInput.trim()) return;
+    const parsed = parseCoordsOrGoogleMapsLink(googlePasteInput);
+    if (parsed) {
+      setFormData((prev) => ({
+        ...prev,
+        latVictima: parsed.lat,
+        lngVictima: parsed.lng,
+      }));
+      setLocationNotice('¡Punto de Google Maps fijado correctamente!');
+      reverseGeocodeOnline(parsed.lat, parsed.lng).then((street) => {
+        if (street) {
+          setFormData((prev) => ({
+            ...prev,
+            domicilioVictima: street,
+          }));
+        }
+      });
+      setGooglePasteInput('');
+      setTimeout(() => setLocationNotice(null), 4000);
+    } else {
+      setLocationNotice('No se reconocieron coordenadas en el enlace o texto.');
+      setTimeout(() => setLocationNotice(null), 3000);
+    }
+  };
 
   useEffect(() => {
     if (initialMeasure && mode === 'edit') {
@@ -354,11 +394,22 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
     try {
       const cityToSave = formData.ciudadVictima?.trim() || 'Victoria';
       const addressToSave = formData.domicilioVictima?.trim();
-      const coords = addressToSave ? geocodeVictoriaAddress(addressToSave, cityToSave) : undefined;
+
+      // Prioritize explicit GPS coordinates selected on Google Maps / map picker by the user
+      // NO CARGAR UBICACIÓN AUTOMÁTICAMENTE: solo si el usuario fijó el punto o coordenadas
+      const hasExplicitCoords =
+        typeof formData.latVictima === 'number' &&
+        typeof formData.lngVictima === 'number' &&
+        isValidGpsCoordinate(formData.latVictima, formData.lngVictima);
+
+      const finalLat = hasExplicitCoords ? formData.latVictima : undefined;
+      const finalLng = hasExplicitCoords ? formData.lngVictima : undefined;
 
       const measureToSave: JudicialMeasure = {
+        ...(initialMeasure || {}),
+        ...formData,
         id: formData.id || `med-${Date.now()}`,
-        timestamp: formData.timestamp || new Date().toLocaleString(),
+        timestamp: formData.timestamp || initialMeasure?.timestamp || new Date().toLocaleString(),
         victima: formData.victima?.trim().toUpperCase() || '',
         victimario: formData.victimario?.trim().toUpperCase() || '',
         tipoMedida: formData.tipoMedida || 'Prohibición de acercamiento',
@@ -373,8 +424,19 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
         ciudadVictima: cityToSave,
         radioExclusionMetros: Number(formData.radioExclusionMetros) || 200,
         domicilioVictimario: formData.domicilioVictimario?.trim(),
-        latVictima: coords?.lat ?? formData.latVictima,
-        lngVictima: coords?.lng ?? formData.lngVictima,
+        latVictima: finalLat,
+        lngVictima: finalLng,
+        // PRESERVAR EXPLÍCITAMENTE TODOS LOS ARCHIVOS PDF SUBIDOS
+        hasCustomPdf: initialMeasure?.hasCustomPdf ?? formData.hasCustomPdf,
+        pdfBlobUrl: initialMeasure?.pdfBlobUrl ?? formData.pdfBlobUrl,
+        serverPdfUrl: initialMeasure?.serverPdfUrl ?? formData.serverPdfUrl,
+        pdfBase64: initialMeasure?.pdfBase64 ?? formData.pdfBase64,
+        pdfFileName: initialMeasure?.pdfFileName ?? formData.pdfFileName,
+        pdfFileSize: initialMeasure?.pdfFileSize ?? formData.pdfFileSize,
+        uploadedAt: initialMeasure?.uploadedAt ?? formData.uploadedAt,
+        driveFileId: initialMeasure?.driveFileId ?? formData.driveFileId,
+        driveFolder: initialMeasure?.driveFolder ?? formData.driveFolder,
+        driveWebViewLink: initialMeasure?.driveWebViewLink ?? formData.driveWebViewLink,
         isOfficialRegistry: true,
         lastUpdated: new Date().toLocaleString(),
       };
@@ -576,17 +638,88 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
           {/* SECTION: DOMICILIO DE LA VÍCTIMA & PERÍMETRO POLICIAL */}
           {/* ========================================================================= */}
           <div className="p-4 bg-slate-50/80 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700/60">
-              <div className="w-7 h-7 rounded-lg bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
-                <MapPin className="w-4 h-4" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-700/60">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-rose-600/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Ubicación Protegida de la Víctima (Geolocalización & Navegación GPS)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Ubicá a la víctima en Google Maps para que el móvil policial llegue a la puerta exacta.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                  Ubicación Protegida de la Víctima (Geolocalización & Navegación GPS)
-                </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Permite ubicar a la víctima en el mapa policial y trazar la ruta de navegación al móvil.
-                </p>
+
+              {/* Botón para abrir el selector interactivo en Google Maps */}
+              <button
+                type="button"
+                onClick={() => setIsLocationModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer self-start sm:self-auto"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>🗺️ Abrir Selector en Google Maps / Satélite</span>
+              </button>
+            </div>
+
+            {/* GPS coordinates status and quick Google Maps paste strip */}
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Coordenadas GPS:</span>
+                  {typeof formData.latVictima === 'number' && typeof formData.lngVictima === 'number' ? (
+                    <span className="px-2 py-0.5 rounded font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      {formData.latVictima.toFixed(5)}, {formData.lngVictima.toFixed(5)}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[11px]">
+                      ⚠️ Sin coordenadas GPS fijadas (Marcar en mapa o pegar enlace)
+                    </span>
+                  )}
+                </div>
+
+                {typeof formData.latVictima === 'number' && typeof formData.lngVictima === 'number' && (
+                  <a
+                    href={getGoogleMapsPlaceUrl(formData.latVictima, formData.lngVictima)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-[11px] font-semibold"
+                  >
+                    <span>Ver punto en Google Maps</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+
+              {/* Input rápido para pegar link de Google Maps o coordenadas */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                  Pegar enlace o coordenadas Google Maps:
+                </span>
+                <div className="flex items-center gap-1 flex-1">
+                  <input
+                    type="text"
+                    value={googlePasteInput}
+                    onChange={(e) => setGooglePasteInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleApplyGoogleMapsInForm())}
+                    placeholder="Ej. -32.6184, -60.1558 o enlace maps.google.com"
+                    className="flex-1 px-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyGoogleMapsInForm}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs cursor-pointer transition-colors"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+                {locationNotice && (
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                    {locationNotice}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1231,6 +1364,39 @@ export const MeasureModal: React.FC<MeasureModalProps> = ({
           onClose={() => setShowWhatsApp(false)}
           measure={initialMeasure}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* Selector interactivo de Ubicación en Google Maps */}
+      {isLocationModalOpen && (
+        <EditVictimLocationModal
+          isOpen={isLocationModalOpen}
+          onClose={() => setIsLocationModalOpen(false)}
+          measure={{
+            ...formData,
+            id: formData.id || 'temp',
+            victima: formData.victima || 'Víctima',
+            victimario: formData.victimario || 'Denunciado',
+            nroOficio: formData.nroOficio || 'S/N',
+            tipoMedida: formData.tipoMedida || 'Medida',
+            provenienteDe: formData.provenienteDe || 'JDO FLIA',
+            fechaDesde: formData.fechaDesde || '',
+            fechaHasta: formData.fechaHasta || '',
+            medidaReciproca: 'No',
+            timestamp: '',
+          }}
+          onSaveLocation={({ domicilioVictima, ciudadVictima, latVictima, lngVictima, radioExclusionMetros }) => {
+            setFormData((prev) => ({
+              ...prev,
+              domicilioVictima,
+              ciudadVictima,
+              latVictima,
+              lngVictima,
+              radioExclusionMetros,
+            }));
+            setLocationNotice('¡Ubicación actualizada desde el mapa!');
+            setTimeout(() => setLocationNotice(null), 4000);
+          }}
         />
       )}
     </div>
